@@ -391,16 +391,21 @@ function importBackup(file) {
 
 function renderOptions(select, options, allLabel) {
   const current = select.value;
-  select.innerHTML = [`<option value="all">${allLabel}</option>`, ...options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)].join('');
+  const sortedOptions = sortLabels(options);
+  select.innerHTML = [`<option value="all">${allLabel}</option>`, ...sortedOptions.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)].join('');
   select.value = options.includes(current) ? current : 'all';
 }
 
 function renderValueOptions(options, currentValue, placeholder = '') {
-  const values = [...new Set([currentValue, ...options].filter((value) => value !== undefined && value !== null))];
+  const values = sortLabels([...new Set([currentValue, ...options].filter((value) => value !== undefined && value !== null))]);
   const placeholderOption = placeholder ? `<option value="">${escapeHtml(placeholder)}</option>` : '';
   return `${placeholderOption}${values.map((option) => `
     <option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>
   `).join('')}`;
+}
+
+function sortLabels(values) {
+  return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }));
 }
 
 function chipClass(value) {
@@ -549,9 +554,9 @@ function render() {
   renderOptions(el.categorySelect, state.categories, 'All categories');
   renderOptions(el.purposeSelect, state.purposes, 'All purposes');
 
-  el.categories.innerHTML = state.categories.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
-  el.purposes.innerHTML = state.purposes.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
-  el.people.innerHTML = state.people.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+  el.categories.innerHTML = sortLabels(state.categories).map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+  el.purposes.innerHTML = sortLabels(state.purposes).map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+  el.people.innerHTML = sortLabels(state.people).map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
 
   el.ruleList.innerHTML = state.rules.map((rule) => `
     <article class="rule">
