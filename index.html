@@ -3,15 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Local Budget</title>
+    <title>Money Map</title>
     <link rel="stylesheet" href="src/styles.css" />
   </head>
   <body>
     <main>
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Local only</p>
-          <h1>Budget</h1>
+        <div class="brand">
+          <span class="brand-mark">MM</span>
+          <div>
+            <p class="eyebrow">Private local budget</p>
+            <h1>Money Map</h1>
+          </div>
         </div>
         <div class="actions">
           <button type="button" id="backupBtn" title="Download backup">Backup</button>
@@ -22,7 +25,19 @@
         </div>
       </header>
 
-      <section class="import-band">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">This month</p>
+          <h2 id="heroMonth">Ready for your next import</h2>
+          <p id="heroInsight">Upload a statement to build a clearer map of spending, purposes, and people.</p>
+        </div>
+        <div class="hero-stat">
+          <span>Needs review</span>
+          <strong id="reviewMetric">0</strong>
+        </div>
+      </section>
+
+      <section class="import-band" id="dropZone">
         <div>
           <h2>Import monthly statements</h2>
           <p>Choose bank or credit-card CSV files. They are read in your browser and stored locally.</p>
@@ -58,13 +73,17 @@
       <section class="layout">
         <aside class="panel rules">
           <div class="panel-title">
-            <h2>Rules</h2>
+            <div>
+              <h2>Rules</h2>
+              <p>Teach Money Map how to tag repeat transactions.</p>
+            </div>
             <button type="button" id="recategoriseBtn" title="Re-apply rules">Refresh</button>
           </div>
           <div class="rule-form">
             <input id="ruleMatch" placeholder="keywords, comma separated" />
             <input id="ruleCategory" placeholder="category" list="categories" />
-            <input id="rulePerson" placeholder="person/project" list="people" />
+            <input id="rulePurpose" placeholder="purpose" list="purposes" />
+            <input id="rulePerson" placeholder="person" list="people" />
             <button type="button" id="addRuleBtn">Add rule</button>
           </div>
           <div id="ruleList" class="rule-list"></div>
@@ -84,11 +103,16 @@
               <span>Category</span>
               <select id="categorySelect"></select>
             </label>
+            <label>
+              <span>Purpose</span>
+              <select id="purposeSelect"></select>
+            </label>
           </div>
 
           <div id="categoryBars" class="category-bars"></div>
 
           <datalist id="categories"></datalist>
+          <datalist id="purposes"></datalist>
           <datalist id="people"></datalist>
 
           <div class="table-wrap">
@@ -99,13 +123,14 @@
                   <th>Description</th>
                   <th>Amount</th>
                   <th>Category</th>
-                  <th>Person/project</th>
+                  <th>Purpose</th>
+                  <th>Person</th>
                   <th>Account</th>
                 </tr>
               </thead>
               <tbody id="transactionRows">
                 <tr>
-                  <td colspan="6" class="empty">Upload a CSV statement to start building your budget.</td>
+                  <td colspan="7" class="empty">Upload a CSV statement to start building your budget.</td>
                 </tr>
               </tbody>
             </table>

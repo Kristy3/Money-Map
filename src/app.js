@@ -6,23 +6,28 @@ function makeId() {
 }
 
 const defaultRules = [
-  { id: makeId(), match: 'basketball, hoops, stadium sports', category: 'Kids Sports', person: 'Connor' },
-  { id: makeId(), match: 'woolworths, coles, aldi, costco', category: 'Groceries', person: 'Family' },
-  { id: makeId(), match: 'netflix, spotify, disney, apple.com/bill', category: 'Subscriptions', person: 'Family' },
-  { id: makeId(), match: 'electricity, energy, water, council, gas', category: 'Utilities', person: 'Home' },
-  { id: makeId(), match: 'chemist, pharmacy, medical, doctor, dentist', category: 'Health', person: 'Family' },
-  { id: makeId(), match: 'uber, opal, petrol, bp, shell, caltex', category: 'Transport', person: 'Family' },
+  { id: makeId(), match: 'basketball, hoops, stadium sports', category: 'Kids Sports', purpose: 'Sport', person: 'Connor' },
+  { id: makeId(), match: 'the him, him gift card', category: 'Gift Cards', purpose: 'General Spending', person: '' },
+  { id: makeId(), match: 'pamper card, pamper gift card', category: 'Gift Cards', purpose: 'Wellness', person: '' },
+  { id: makeId(), match: 'restaurant card, dining card', category: 'Gift Cards', purpose: 'Eating Out', person: '' },
+  { id: makeId(), match: 'woolworths, coles, aldi, costco', category: 'Groceries', purpose: 'Household', person: 'Family' },
+  { id: makeId(), match: 'salary, payroll, wages', category: 'Income', purpose: 'Income', person: 'Personal' },
+  { id: makeId(), match: 'netflix, spotify, disney, apple.com/bill', category: 'Subscriptions', purpose: 'Entertainment', person: 'Family' },
+  { id: makeId(), match: 'electricity, energy, water, council, gas', category: 'Utilities', purpose: 'Home', person: 'Home' },
+  { id: makeId(), match: 'chemist, pharmacy, medical, doctor, dentist', category: 'Health', purpose: 'Wellness', person: 'Family' },
+  { id: makeId(), match: 'uber, opal, petrol, bp, shell, caltex', category: 'Transport', purpose: 'Getting Around', person: 'Family' },
 ];
 
 const initialState = {
   transactions: [],
   rules: defaultRules,
-  categories: ['Groceries', 'Kids Sports', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
+  categories: ['Groceries', 'Gift Cards', 'Kids Sports', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
+  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
   people: ['Connor', 'Family', 'Home', 'Personal'],
 };
 
 let state = loadState();
-let filters = { query: '', month: 'all', category: 'all' };
+let filters = { query: '', month: 'all', category: 'all', purpose: 'all' };
 
 const el = {
   backupBtn: document.querySelector('#backupBtn'),
@@ -33,25 +38,32 @@ const el = {
   spendingMetric: document.querySelector('#spendingMetric'),
   netMetric: document.querySelector('#netMetric'),
   countMetric: document.querySelector('#countMetric'),
+  reviewMetric: document.querySelector('#reviewMetric'),
+  heroMonth: document.querySelector('#heroMonth'),
+  heroInsight: document.querySelector('#heroInsight'),
   recategoriseBtn: document.querySelector('#recategoriseBtn'),
   ruleMatch: document.querySelector('#ruleMatch'),
   ruleCategory: document.querySelector('#ruleCategory'),
+  rulePurpose: document.querySelector('#rulePurpose'),
   rulePerson: document.querySelector('#rulePerson'),
   addRuleBtn: document.querySelector('#addRuleBtn'),
   ruleList: document.querySelector('#ruleList'),
   queryInput: document.querySelector('#queryInput'),
   monthSelect: document.querySelector('#monthSelect'),
   categorySelect: document.querySelector('#categorySelect'),
+  purposeSelect: document.querySelector('#purposeSelect'),
   categoryBars: document.querySelector('#categoryBars'),
   categories: document.querySelector('#categories'),
+  purposes: document.querySelector('#purposes'),
   people: document.querySelector('#people'),
   transactionRows: document.querySelector('#transactionRows'),
+  dropZone: document.querySelector('#dropZone'),
 };
 
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? { ...initialState, ...JSON.parse(saved) } : cloneInitialState();
+    return saved ? migrateState({ ...initialState, ...JSON.parse(saved) }) : cloneInitialState();
   } catch {
     return cloneInitialState();
   }
@@ -59,6 +71,29 @@ function loadState() {
 
 function cloneInitialState() {
   return JSON.parse(JSON.stringify(initialState));
+}
+
+function migrateState(savedState) {
+  const next = {
+    ...cloneInitialState(),
+    ...savedState,
+    purposes: savedState.purposes || cloneInitialState().purposes,
+  };
+  next.transactions = (next.transactions || []).map((transaction) => ({
+    purpose: '',
+    ...transaction,
+  }));
+  const savedRules = (next.rules || []).map((rule) => ({
+    purpose: '',
+    ...rule,
+  }));
+  const savedMatches = new Set(savedRules.map((rule) => rule.match));
+  const missingStarterRules = defaultRules.filter((rule) => !savedMatches.has(rule.match));
+  next.rules = [...missingStarterRules, ...savedRules];
+  next.categories = [...new Set([...cloneInitialState().categories, ...(next.categories || [])])];
+  next.purposes = [...new Set([...cloneInitialState().purposes, ...(next.purposes || [])])];
+  next.people = [...new Set([...cloneInitialState().people, ...(next.people || [])])];
+  return next;
 }
 
 function commit(nextState) {
@@ -125,6 +160,7 @@ function applyRules(description) {
 
   return {
     category: rule?.category || 'Uncategorised',
+    purpose: rule?.purpose || '',
     person: rule?.person || '',
     ruleId: rule?.id || '',
   };
@@ -208,8 +244,9 @@ function filteredTransactions() {
   return state.transactions
     .filter((transaction) => filters.month === 'all' || monthKey(transaction.date) === filters.month)
     .filter((transaction) => filters.category === 'all' || transaction.category === filters.category)
+    .filter((transaction) => filters.purpose === 'all' || transaction.purpose === filters.purpose)
     .filter((transaction) => {
-      const haystack = `${transaction.description} ${transaction.category} ${transaction.person} ${transaction.account}`.toLowerCase();
+      const haystack = `${transaction.description} ${transaction.category} ${transaction.purpose} ${transaction.person} ${transaction.account}`.toLowerCase();
       return haystack.includes(filters.query.toLowerCase());
     })
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -220,6 +257,7 @@ function updateTransaction(id, field, value) {
     ...state,
     transactions: state.transactions.map((transaction) => (transaction.id === id ? { ...transaction, [field]: value } : transaction)),
     categories: field === 'category' && value && !state.categories.includes(value) ? [...state.categories, value] : state.categories,
+    purposes: field === 'purpose' && value && !state.purposes.includes(value) ? [...state.purposes, value] : state.purposes,
     people: field === 'person' && value && !state.people.includes(value) ? [...state.people, value] : state.people,
   };
   commit(next);
@@ -228,17 +266,20 @@ function updateTransaction(id, field, value) {
 function addRule() {
   const match = el.ruleMatch.value.trim();
   const category = el.ruleCategory.value.trim();
+  const purpose = el.rulePurpose.value.trim();
   const person = el.rulePerson.value.trim();
   if (!match || !category) return;
 
   commit({
     ...state,
-    rules: [{ id: makeId(), match, category, person }, ...state.rules],
+    rules: [{ id: makeId(), match, category, purpose, person }, ...state.rules],
     categories: category && !state.categories.includes(category) ? [...state.categories, category] : state.categories,
+    purposes: purpose && !state.purposes.includes(purpose) ? [...state.purposes, purpose] : state.purposes,
     people: person && !state.people.includes(person) ? [...state.people, person] : state.people,
   });
   el.ruleMatch.value = '';
   el.ruleCategory.value = '';
+  el.rulePurpose.value = '';
   el.rulePerson.value = '';
 }
 
@@ -302,6 +343,10 @@ function renderOptions(select, options, allLabel) {
   select.value = options.includes(current) ? current : 'all';
 }
 
+function chipClass(value) {
+  return `chip chip-${String(value || 'empty').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
 function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;',
@@ -322,24 +367,37 @@ function render() {
     groups[key] = (groups[key] || 0) + transaction.amount;
     return groups;
   }, {});
+  const reviewCount = state.transactions.filter((transaction) => transaction.category === 'Uncategorised' || !transaction.purpose).length;
+  const latestMonth = [...new Set(state.transactions.map((transaction) => monthKey(transaction.date)).filter((item) => item !== 'No date'))].sort().at(-1);
+  const topCategory = Object.entries(byCategory)
+    .filter(([, total]) => total < 0)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
 
   el.incomeMetric.textContent = money(income);
   el.spendingMetric.textContent = money(expenses);
   el.netMetric.textContent = money(net);
   el.netMetric.className = net < 0 ? 'negative' : 'positive';
   el.countMetric.textContent = filtered.length;
+  el.reviewMetric.textContent = reviewCount;
+  el.heroMonth.textContent = latestMonth ? `Mapping ${latestMonth}` : 'Ready for your next import';
+  el.heroInsight.textContent = topCategory
+    ? `${topCategory[0]} is the biggest spend in this view at ${money(Math.abs(topCategory[1]))}.`
+    : 'Upload a statement to build a clearer map of spending, purposes, and people.';
 
   const months = [...new Set(state.transactions.map((transaction) => monthKey(transaction.date)))];
   renderOptions(el.monthSelect, months, 'All months');
   renderOptions(el.categorySelect, state.categories, 'All categories');
+  renderOptions(el.purposeSelect, state.purposes, 'All purposes');
 
   el.categories.innerHTML = state.categories.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+  el.purposes.innerHTML = state.purposes.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
   el.people.innerHTML = state.people.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
 
   el.ruleList.innerHTML = state.rules.map((rule) => `
     <article class="rule">
       <button type="button" data-delete-rule="${escapeHtml(rule.id)}" title="Delete rule">Remove</button>
       <strong>${escapeHtml(rule.category)}</strong>
+      ${rule.purpose ? `<span>${escapeHtml(rule.purpose)}</span>` : ''}
       ${rule.person ? `<span>${escapeHtml(rule.person)}</span>` : ''}
       <p>${escapeHtml(rule.match)}</p>
     </article>
@@ -362,13 +420,19 @@ function render() {
       <td>
         <strong>${escapeHtml(transaction.description)}</strong>
         <small>${escapeHtml(transaction.sourceFile)}</small>
+        <div class="chip-row">
+          <span class="${chipClass(transaction.category)}">${escapeHtml(transaction.category || 'Uncategorised')}</span>
+          ${transaction.purpose ? `<span class="${chipClass(transaction.purpose)}">${escapeHtml(transaction.purpose)}</span>` : ''}
+          ${transaction.person ? `<span class="${chipClass(transaction.person)}">${escapeHtml(transaction.person)}</span>` : ''}
+        </div>
       </td>
       <td class="${transaction.amount < 0 ? 'negative' : 'positive'}">${money(transaction.amount)}</td>
       <td><input value="${escapeHtml(transaction.category)}" list="categories" data-transaction="${transaction.id}" data-field="category" /></td>
+      <td><input value="${escapeHtml(transaction.purpose || '')}" list="purposes" data-transaction="${transaction.id}" data-field="purpose" placeholder="Optional" /></td>
       <td><input value="${escapeHtml(transaction.person)}" list="people" data-transaction="${transaction.id}" data-field="person" placeholder="Optional" /></td>
       <td>${escapeHtml(transaction.account)}</td>
     </tr>
-  `).join('') : '<tr><td colspan="6" class="empty">Upload a CSV statement to start building your budget.</td></tr>';
+  `).join('') : '<tr><td colspan="7" class="empty">Upload a CSV statement to start building your budget.</td></tr>';
 }
 
 el.csvInput.addEventListener('change', (event) => handleFiles(event.target.files));
@@ -387,6 +451,22 @@ el.monthSelect.addEventListener('change', (event) => {
 el.categorySelect.addEventListener('change', (event) => {
   filters.category = event.target.value;
   render();
+});
+el.purposeSelect.addEventListener('change', (event) => {
+  filters.purpose = event.target.value;
+  render();
+});
+el.dropZone.addEventListener('dragover', (event) => {
+  event.preventDefault();
+  el.dropZone.classList.add('dragging');
+});
+el.dropZone.addEventListener('dragleave', () => {
+  el.dropZone.classList.remove('dragging');
+});
+el.dropZone.addEventListener('drop', (event) => {
+  event.preventDefault();
+  el.dropZone.classList.remove('dragging');
+  handleFiles([...event.dataTransfer.files].filter((file) => file.name.toLowerCase().endsWith('.csv')));
 });
 el.ruleList.addEventListener('click', (event) => {
   const id = event.target.dataset.deleteRule;
