@@ -464,6 +464,15 @@ td input {
   color: #78501a;
 }
 
+.chip-holiday,
+.chip-canada-alaska,
+.chip-usa-2026,
+.chip-queensland-2027,
+.chip-europe-2027 {
+  background: #dfe4f6;
+  color: #3c4f8a;
+}
+
 .chip-kids-sports,
 .chip-sport,
 .chip-connor {

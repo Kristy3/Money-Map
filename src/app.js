@@ -21,8 +21,8 @@ const defaultRules = [
 const initialState = {
   transactions: [],
   rules: defaultRules,
-  categories: ['Groceries', 'Gift Cards', 'Kids Sports', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
-  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
+  categories: ['Groceries', 'Gift Cards', 'Holiday', 'Kids Sports', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
+  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
   people: ['Connor', 'Family', 'Home', 'Personal'],
 };
 
