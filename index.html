@@ -70,6 +70,58 @@
         </div>
       </section>
 
+      <section class="chart-grid">
+        <article class="panel chart-panel">
+          <div class="panel-title">
+            <div>
+              <h2>Monthly Spending</h2>
+              <p>Work reimbursements are excluded.</p>
+            </div>
+          </div>
+          <div id="monthlyChart" class="chart empty-chart">Import transactions to see monthly spending.</div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-title">
+            <div>
+              <h2>Category Split</h2>
+              <p>Largest spending categories in this view.</p>
+            </div>
+          </div>
+          <div id="categoryChart" class="chart empty-chart">No spending categories yet.</div>
+        </article>
+        <article class="panel chart-panel">
+          <div class="panel-title">
+            <div>
+              <h2>Purpose Split</h2>
+              <p>Useful for holidays, gift cards, and family tracking.</p>
+            </div>
+          </div>
+          <div id="purposeChart" class="chart empty-chart">No purpose data yet.</div>
+        </article>
+      </section>
+
+      <section class="panel debt-panel">
+        <div class="panel-title">
+          <div>
+            <h2>Debt Tracker</h2>
+            <p>Log balances over time for credit cards, loans, repayments, or money owed.</p>
+          </div>
+        </div>
+        <div class="debt-layout">
+          <div class="debt-form">
+            <input id="debtName" placeholder="Debt name, e.g. Amex or Car loan" />
+            <input id="debtDate" type="date" />
+            <input id="debtBalance" type="number" step="0.01" placeholder="Current balance" />
+            <button type="button" id="addDebtBtn">Add balance</button>
+          </div>
+          <div>
+            <div id="debtSummary" class="debt-summary"></div>
+            <div id="debtChart" class="chart debt-chart empty-chart">Add a debt balance to start tracking progress.</div>
+          </div>
+        </div>
+        <div id="debtList" class="debt-list"></div>
+      </section>
+
       <section class="layout">
         <aside class="panel rules">
           <div class="panel-title">

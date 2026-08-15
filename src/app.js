@@ -21,6 +21,7 @@ const defaultRules = [
 
 const initialState = {
   transactions: [],
+  debts: [],
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Holiday', 'Kids Sports', 'Work', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
   purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
@@ -42,6 +43,16 @@ const el = {
   reviewMetric: document.querySelector('#reviewMetric'),
   heroMonth: document.querySelector('#heroMonth'),
   heroInsight: document.querySelector('#heroInsight'),
+  monthlyChart: document.querySelector('#monthlyChart'),
+  categoryChart: document.querySelector('#categoryChart'),
+  purposeChart: document.querySelector('#purposeChart'),
+  debtName: document.querySelector('#debtName'),
+  debtDate: document.querySelector('#debtDate'),
+  debtBalance: document.querySelector('#debtBalance'),
+  addDebtBtn: document.querySelector('#addDebtBtn'),
+  debtSummary: document.querySelector('#debtSummary'),
+  debtChart: document.querySelector('#debtChart'),
+  debtList: document.querySelector('#debtList'),
   recategoriseBtn: document.querySelector('#recategoriseBtn'),
   ruleMatch: document.querySelector('#ruleMatch'),
   ruleCategory: document.querySelector('#ruleCategory'),
@@ -83,6 +94,14 @@ function migrateState(savedState) {
   next.transactions = (next.transactions || []).map((transaction) => ({
     purpose: '',
     ...transaction,
+  }));
+  next.debts = (next.debts || []).map((debt) => ({
+    id: makeId(),
+    name: 'Debt',
+    date: new Date().toISOString().slice(0, 10),
+    balance: 0,
+    ...debt,
+    balance: Number(debt.balance) || 0,
   }));
   const savedRules = (next.rules || []).map((rule) => ({
     purpose: '',
@@ -237,12 +256,40 @@ function money(value) {
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(value || 0);
 }
 
+function shortMoney(value) {
+  const abs = Math.abs(value || 0);
+  if (abs >= 1000) return `$${Math.round(abs / 100) / 10}k`;
+  return money(abs).replace('.00', '');
+}
+
 function monthKey(date) {
   return date?.slice(0, 7) || 'No date';
 }
 
 function isExcludedFromCalculations(transaction) {
   return excludedCalculationCategories.includes(transaction.category);
+}
+
+function addDebt() {
+  const name = el.debtName.value.trim();
+  const date = el.debtDate.value || new Date().toISOString().slice(0, 10);
+  const balance = Number.parseFloat(el.debtBalance.value);
+  if (!name || Number.isNaN(balance)) {
+    showNotice('Add a debt name and balance first.');
+    return;
+  }
+
+  commit({
+    ...state,
+    debts: [{ id: makeId(), name, date, balance }, ...state.debts],
+  });
+  el.debtName.value = '';
+  el.debtDate.value = new Date().toISOString().slice(0, 10);
+  el.debtBalance.value = '';
+}
+
+function deleteDebt(id) {
+  commit({ ...state, debts: state.debts.filter((debt) => debt.id !== id) });
 }
 
 function filteredTransactions() {
@@ -362,6 +409,100 @@ function escapeHtml(value) {
   })[char]);
 }
 
+function sumBy(items, keyGetter, valueGetter) {
+  return items.reduce((groups, item) => {
+    const key = keyGetter(item) || 'Uncategorised';
+    groups[key] = (groups[key] || 0) + valueGetter(item);
+    return groups;
+  }, {});
+}
+
+function renderHorizontalChart(container, entries, options = {}) {
+  const sortedEntries = entries
+    .filter(([, value]) => Math.abs(value) > 0)
+    .sort((a, b) => (options.preserveOrder ? 0 : Math.abs(b[1]) - Math.abs(a[1])));
+  const cleaned = options.preserveOrder
+    ? sortedEntries.slice(-(options.limit || 8))
+    : sortedEntries.slice(0, options.limit || 8);
+
+  if (!cleaned.length) {
+    container.className = 'chart empty-chart';
+    container.textContent = options.emptyText || 'No chart data yet.';
+    return;
+  }
+
+  const max = Math.max(...cleaned.map(([, value]) => Math.abs(value)), 1);
+  container.className = 'chart';
+  container.innerHTML = cleaned.map(([label, value], index) => `
+    <div class="chart-row">
+      <span>${escapeHtml(label)}</span>
+      <div><i style="width: ${(Math.abs(value) / max) * 100}%; --bar-index: ${index};"></i></div>
+      <b>${money(value)}</b>
+    </div>
+  `).join('');
+}
+
+function renderMonthlyChart(transactions) {
+  const monthly = sumBy(
+    transactions.filter((transaction) => transaction.amount < 0),
+    (transaction) => monthKey(transaction.date),
+    (transaction) => Math.abs(transaction.amount)
+  );
+  renderHorizontalChart(el.monthlyChart, Object.entries(monthly).sort((a, b) => a[0].localeCompare(b[0])), {
+    emptyText: 'Import transactions to see monthly spending.',
+    limit: 12,
+  });
+}
+
+function latestDebtSnapshots() {
+  const latest = {};
+  state.debts.forEach((debt) => {
+    if (!latest[debt.name] || debt.date > latest[debt.name].date) latest[debt.name] = debt;
+  });
+  return Object.values(latest).sort((a, b) => b.balance - a.balance);
+}
+
+function debtTimelineEntries() {
+  const dates = [...new Set(state.debts.map((debt) => debt.date))].sort();
+  const names = [...new Set(state.debts.map((debt) => debt.name))];
+
+  return dates.map((date) => {
+    const total = names.reduce((sum, name) => {
+      const latestForDebt = state.debts
+        .filter((debt) => debt.name === name && debt.date <= date)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+      return sum + (latestForDebt?.balance || 0);
+    }, 0);
+    return [date, total];
+  });
+}
+
+function renderDebts() {
+  const latest = latestDebtSnapshots();
+  const totalDebt = latest.reduce((sum, debt) => sum + debt.balance, 0);
+  el.debtSummary.innerHTML = latest.length
+    ? `<span>Total latest debt</span><strong>${money(totalDebt)}</strong><small>${latest.length} tracked ${latest.length === 1 ? 'debt' : 'debts'}</small>`
+    : '<span>No debts tracked yet</span><strong>$0.00</strong><small>Add a balance snapshot whenever you want.</small>';
+
+  renderHorizontalChart(el.debtChart, debtTimelineEntries(), {
+    emptyText: 'Add a debt balance to start tracking progress.',
+    limit: 12,
+    preserveOrder: true,
+  });
+
+  const rows = [...state.debts].sort((a, b) => b.date.localeCompare(a.date));
+  el.debtList.innerHTML = rows.length ? rows.map((debt) => `
+    <article class="debt-item">
+      <div>
+        <strong>${escapeHtml(debt.name)}</strong>
+        <span>${escapeHtml(debt.date)}</span>
+      </div>
+      <b>${money(debt.balance)}</b>
+      <button type="button" data-delete-debt="${escapeHtml(debt.id)}">Remove</button>
+    </article>
+  `).join('') : '';
+}
+
 function render() {
   const filtered = filteredTransactions();
   const calculated = filtered.filter((transaction) => !isExcludedFromCalculations(transaction));
@@ -373,6 +514,11 @@ function render() {
     groups[key] = (groups[key] || 0) + transaction.amount;
     return groups;
   }, {});
+  const byPurpose = sumBy(
+    calculated.filter((transaction) => transaction.amount < 0),
+    (transaction) => transaction.purpose || 'No purpose',
+    (transaction) => Math.abs(transaction.amount)
+  );
   const reviewCount = state.transactions.filter((transaction) => transaction.category === 'Uncategorised' || !transaction.purpose).length;
   const latestMonth = [...new Set(state.transactions.map((transaction) => monthKey(transaction.date)).filter((item) => item !== 'No date'))].sort().at(-1);
   const topCategory = Object.entries(byCategory)
@@ -420,6 +566,15 @@ function render() {
       </div>
     `).join('');
 
+  renderMonthlyChart(calculated);
+  renderHorizontalChart(el.categoryChart, Object.entries(byCategory).filter(([, total]) => total < 0).map(([name, total]) => [name, Math.abs(total)]), {
+    emptyText: 'No spending categories yet.',
+  });
+  renderHorizontalChart(el.purposeChart, Object.entries(byPurpose), {
+    emptyText: 'No purpose data yet.',
+  });
+  renderDebts();
+
   el.transactionRows.innerHTML = filtered.length ? filtered.map((transaction) => `
     <tr>
       <td>${escapeHtml(transaction.date)}</td>
@@ -445,6 +600,8 @@ function render() {
 el.csvInput.addEventListener('change', (event) => handleFiles(event.target.files));
 el.backupBtn.addEventListener('click', exportBackup);
 el.backupInput.addEventListener('change', (event) => importBackup(event.target.files[0]));
+el.debtDate.value = new Date().toISOString().slice(0, 10);
+el.addDebtBtn.addEventListener('click', addDebt);
 el.addRuleBtn.addEventListener('click', addRule);
 el.recategoriseBtn.addEventListener('click', recategoriseAll);
 el.queryInput.addEventListener('input', (event) => {
@@ -483,6 +640,10 @@ el.transactionRows.addEventListener('change', (event) => {
   const id = event.target.dataset.transaction;
   const field = event.target.dataset.field;
   if (id && field) updateTransaction(id, field, event.target.value);
+});
+el.debtList.addEventListener('click', (event) => {
+  const id = event.target.dataset.deleteDebt;
+  if (id) deleteDebt(id);
 });
 
 render();
