@@ -473,6 +473,12 @@ td input {
   color: #3c4f8a;
 }
 
+.chip-work,
+.chip-excluded {
+  background: #eadfd3;
+  color: #6e4d38;
+}
+
 .chip-kids-sports,
 .chip-sport,
 .chip-connor {

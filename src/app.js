@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'local-budget-app:v1';
+const excludedCalculationCategories = ['Work'];
 
 function makeId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -21,7 +22,7 @@ const defaultRules = [
 const initialState = {
   transactions: [],
   rules: defaultRules,
-  categories: ['Groceries', 'Gift Cards', 'Holiday', 'Kids Sports', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
+  categories: ['Groceries', 'Gift Cards', 'Holiday', 'Kids Sports', 'Work', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
   purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
   people: ['Connor', 'Family', 'Home', 'Personal'],
 };
@@ -240,6 +241,10 @@ function monthKey(date) {
   return date?.slice(0, 7) || 'No date';
 }
 
+function isExcludedFromCalculations(transaction) {
+  return excludedCalculationCategories.includes(transaction.category);
+}
+
 function filteredTransactions() {
   return state.transactions
     .filter((transaction) => filters.month === 'all' || monthKey(transaction.date) === filters.month)
@@ -359,10 +364,11 @@ function escapeHtml(value) {
 
 function render() {
   const filtered = filteredTransactions();
-  const expenses = filtered.filter((transaction) => transaction.amount < 0).reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  const income = filtered.filter((transaction) => transaction.amount > 0).reduce((sum, transaction) => sum + transaction.amount, 0);
+  const calculated = filtered.filter((transaction) => !isExcludedFromCalculations(transaction));
+  const expenses = calculated.filter((transaction) => transaction.amount < 0).reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+  const income = calculated.filter((transaction) => transaction.amount > 0).reduce((sum, transaction) => sum + transaction.amount, 0);
   const net = income - expenses;
-  const byCategory = filtered.reduce((groups, transaction) => {
+  const byCategory = calculated.reduce((groups, transaction) => {
     const key = transaction.category || 'Uncategorised';
     groups[key] = (groups[key] || 0) + transaction.amount;
     return groups;
@@ -424,6 +430,7 @@ function render() {
           <span class="${chipClass(transaction.category)}">${escapeHtml(transaction.category || 'Uncategorised')}</span>
           ${transaction.purpose ? `<span class="${chipClass(transaction.purpose)}">${escapeHtml(transaction.purpose)}</span>` : ''}
           ${transaction.person ? `<span class="${chipClass(transaction.person)}">${escapeHtml(transaction.person)}</span>` : ''}
+          ${isExcludedFromCalculations(transaction) ? '<span class="chip chip-excluded">Excluded</span>' : ''}
         </div>
       </td>
       <td class="${transaction.amount < 0 ? 'negative' : 'positive'}">${money(transaction.amount)}</td>
