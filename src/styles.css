@@ -603,6 +603,34 @@ td select {
   color: #475569;
 }
 
+.chip-insurance,
+.chip-fees,
+.chip-amex-fees {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.chip-car,
+.chip-charging,
+.chip-parking,
+.chip-servicing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.chip-one-off,
+.chip-birthday {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.chip-sherwood,
+.chip-dee-why,
+.chip-berridale {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
 .chip-kids-sports,
 .chip-sport,
 .chip-connor {
@@ -611,9 +639,17 @@ td select {
 }
 
 .chip-wellness,
-.chip-health {
+.chip-health,
+.chip-gym {
   background: #ede9fe;
   color: #5b21b6;
+}
+
+.chip-mobile-phone,
+.chip-electricity,
+.chip-ai {
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 .chip-dining,

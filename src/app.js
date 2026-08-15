@@ -23,9 +23,9 @@ const initialState = {
   transactions: [],
   debts: [],
   rules: defaultRules,
-  categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'Work', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
-  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
-  people: ['Connor', 'Family', 'Home', 'Personal'],
+  categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'Work', 'Insurance', 'Fees', 'Car', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
+  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
+  people: ['Connor', 'Family', 'Home', 'Personal', 'Martin', 'Adam', 'Jacob', 'Kristy'],
 };
 
 let state = loadState();
