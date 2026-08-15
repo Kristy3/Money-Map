@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+dist/
+.vite/
+
+# Local runtime files
+.DS_Store
+Thumbs.db
+
+# Private financial data - do not sync bank/credit-card CSVs or exports
+data/statements/
+data/exports/
+*.csv
+*.ofx
+*.qif
+
+# Optional local app snapshots/backups
+*.local.json
+*.backup.json
