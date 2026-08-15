@@ -619,14 +619,16 @@ td select {
 }
 
 .chip-one-off,
-.chip-birthday {
+.chip-birthday,
+.chip-charity {
   background: #eef2ff;
   color: #4338ca;
 }
 
 .chip-sherwood,
 .chip-dee-why,
-.chip-berridale {
+.chip-berridale,
+.chip-eddies {
   background: #e0f2fe;
   color: #0369a1;
 }
@@ -647,10 +649,18 @@ td select {
 
 .chip-gaming,
 .chip-mobile-phone,
+.chip-internet,
+.chip-ventra,
+.chip-apple-care,
 .chip-electricity,
 .chip-ai {
   background: #dbeafe;
   color: #1e40af;
+}
+
+.chip-lunch-orders {
+  background: #ccfbf1;
+  color: #0f766e;
 }
 
 .chip-dining,
