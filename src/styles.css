@@ -552,7 +552,8 @@ td strong {
   max-width: 420px;
 }
 
-td input {
+td input,
+td select {
   min-width: 130px;
 }
 
@@ -581,6 +582,7 @@ td input {
 }
 
 .chip-gift-cards,
+.chip-gifts,
 .chip-general-spending {
   background: #e0f2fe;
   color: #075985;

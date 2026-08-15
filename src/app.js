@@ -23,7 +23,7 @@ const initialState = {
   transactions: [],
   debts: [],
   rules: defaultRules,
-  categories: ['Groceries', 'Gift Cards', 'Holiday', 'Kids Sports', 'Work', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
+  categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'Work', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
   purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
   people: ['Connor', 'Family', 'Home', 'Personal'],
 };
@@ -395,6 +395,14 @@ function renderOptions(select, options, allLabel) {
   select.value = options.includes(current) ? current : 'all';
 }
 
+function renderValueOptions(options, currentValue, placeholder = '') {
+  const values = [...new Set([currentValue, ...options].filter((value) => value !== undefined && value !== null))];
+  const placeholderOption = placeholder ? `<option value="">${escapeHtml(placeholder)}</option>` : '';
+  return `${placeholderOption}${values.map((option) => `
+    <option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>
+  `).join('')}`;
+}
+
 function chipClass(value) {
   return `chip chip-${String(value || 'empty').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 }
@@ -589,9 +597,21 @@ function render() {
         </div>
       </td>
       <td class="${transaction.amount < 0 ? 'negative' : 'positive'}">${money(transaction.amount)}</td>
-      <td><input value="${escapeHtml(transaction.category)}" list="categories" data-transaction="${transaction.id}" data-field="category" /></td>
-      <td><input value="${escapeHtml(transaction.purpose || '')}" list="purposes" data-transaction="${transaction.id}" data-field="purpose" placeholder="Optional" /></td>
-      <td><input value="${escapeHtml(transaction.person)}" list="people" data-transaction="${transaction.id}" data-field="person" placeholder="Optional" /></td>
+      <td>
+        <select data-transaction="${transaction.id}" data-field="category">
+          ${renderValueOptions(state.categories, transaction.category || 'Uncategorised')}
+        </select>
+      </td>
+      <td>
+        <select data-transaction="${transaction.id}" data-field="purpose">
+          ${renderValueOptions(state.purposes, transaction.purpose || '', 'Optional')}
+        </select>
+      </td>
+      <td>
+        <select data-transaction="${transaction.id}" data-field="person">
+          ${renderValueOptions(state.people, transaction.person || '', 'Optional')}
+        </select>
+      </td>
       <td>${escapeHtml(transaction.account)}</td>
     </tr>
   `).join('') : '<tr><td colspan="7" class="empty">Upload a CSV statement to start building your budget.</td></tr>';
