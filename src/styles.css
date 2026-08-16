@@ -597,6 +597,7 @@ td select {
   color: #3c4f8a;
 }
 
+.chip-transfer,
 .chip-work,
 .chip-excluded {
   background: #e2e8f0;
@@ -661,6 +662,12 @@ td select {
 .chip-lunch-orders {
   background: #ccfbf1;
   color: #0f766e;
+}
+
+.chip-driving-lessons,
+.chip-clothing {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .chip-dining,
