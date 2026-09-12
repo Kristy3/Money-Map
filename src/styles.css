@@ -640,7 +640,9 @@ td select {
 
 .chip-insurance,
 .chip-fees,
-.chip-amex-fees {
+.chip-amex-fees,
+.chip-tax,
+.chip-tax-bill {
   background: #e0e7ff;
   color: #3730a3;
 }
