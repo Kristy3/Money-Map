@@ -372,6 +372,94 @@ small,
   margin: 18px 0;
 }
 
+.gift-card-panel {
+  margin: 18px 0;
+}
+
+.gift-card-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 360px minmax(0, 1fr);
+}
+
+.gift-card-form {
+  display: grid;
+  gap: 8px;
+}
+
+.gift-card-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.gift-card-stat {
+  background: #eff6ff;
+  border: 1px solid #cfe1fb;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.gift-card-stat span,
+.gift-card-item span,
+.gift-card-match span {
+  color: #64748b;
+  display: block;
+  font-size: 0.82rem;
+}
+
+.gift-card-stat strong {
+  display: block;
+  font-size: 1.35rem;
+  margin-top: 4px;
+}
+
+.gift-card-matches,
+.gift-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.gift-card-match {
+  align-items: center;
+  background: #eef6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(190px, 1fr) minmax(240px, 1.2fr) 110px;
+  padding: 10px;
+}
+
+.gift-card-item {
+  align-items: center;
+  background: #f8fbff;
+  border: 1px solid #dbe7f7;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) 120px 150px;
+  padding: 10px;
+}
+
+.gift-card-item.is-matched {
+  opacity: 0.78;
+}
+
+.gift-card-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.gift-card-actions button {
+  background: transparent;
+  color: #64748b;
+  min-height: 34px;
+  padding: 0 8px;
+}
+
 .debt-layout {
   display: grid;
   gap: 16px;
@@ -766,6 +854,11 @@ td select {
     grid-template-columns: 1fr;
   }
 
+  .gift-card-layout,
+  .gift-card-summary {
+    grid-template-columns: 1fr;
+  }
+
   .filters {
     grid-template-columns: 1fr 1fr;
   }
@@ -776,8 +869,14 @@ td select {
 
   .chart-row,
   .import-history-item,
+  .gift-card-match,
+  .gift-card-item,
   .debt-item {
     grid-template-columns: 1fr;
+  }
+
+  .gift-card-actions {
+    justify-content: flex-start;
   }
 }
 

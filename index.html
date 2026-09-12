@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Money Map</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260912-orthodontics" />
+    <link rel="stylesheet" href="src/styles.css?v=20260912-gift-card-tracker" />
   </head>
   <body>
     <main>
@@ -110,6 +110,32 @@
         </article>
       </section>
 
+      <section class="panel gift-card-panel">
+        <div class="panel-title">
+          <div>
+            <h2>Gift Card Tracker</h2>
+            <p>Record gift cards when you buy them, then match them to statement transactions later.</p>
+          </div>
+        </div>
+        <div class="gift-card-layout">
+          <div class="gift-card-form">
+            <input id="giftCardDate" type="date" />
+            <input id="giftCardProvider" placeholder="Provider, e.g. Woolworths, Coles, Qantas Marketplace" />
+            <input id="giftCardAmount" type="number" step="0.01" placeholder="Amount" />
+            <input id="giftCardType" placeholder="Card type, e.g. Amazon, Priceline, Restaurant" />
+            <input id="giftCardPurpose" placeholder="Purpose" list="purposes" />
+            <input id="giftCardPerson" placeholder="Person optional" list="people" />
+            <input id="giftCardNotes" placeholder="Notes optional" />
+            <button type="button" id="addGiftCardBtn">Add gift card</button>
+          </div>
+          <div>
+            <div id="giftCardSummary" class="gift-card-summary"></div>
+            <div id="giftCardMatches" class="gift-card-matches"></div>
+          </div>
+        </div>
+        <div id="giftCardList" class="gift-card-list"></div>
+      </section>
+
       <section class="panel debt-panel">
         <div class="panel-title">
           <div>
@@ -200,6 +226,6 @@
         </section>
       </section>
     </main>
-    <script src="src/app.js?v=20260912-orthodontics"></script>
+    <script src="src/app.js?v=20260912-gift-card-tracker"></script>
   </body>
 </html>

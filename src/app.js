@@ -23,6 +23,7 @@ const initialState = {
   transactions: [],
   importHistory: [],
   debts: [],
+  giftCards: [],
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'School Fees', 'Transfer', 'Work', 'Insurance', 'Fees', 'Car', 'Tax', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
   purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Orthodontics', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
@@ -48,6 +49,17 @@ const el = {
   monthlyChart: document.querySelector('#monthlyChart'),
   categoryChart: document.querySelector('#categoryChart'),
   purposeChart: document.querySelector('#purposeChart'),
+  giftCardDate: document.querySelector('#giftCardDate'),
+  giftCardProvider: document.querySelector('#giftCardProvider'),
+  giftCardAmount: document.querySelector('#giftCardAmount'),
+  giftCardType: document.querySelector('#giftCardType'),
+  giftCardPurpose: document.querySelector('#giftCardPurpose'),
+  giftCardPerson: document.querySelector('#giftCardPerson'),
+  giftCardNotes: document.querySelector('#giftCardNotes'),
+  addGiftCardBtn: document.querySelector('#addGiftCardBtn'),
+  giftCardSummary: document.querySelector('#giftCardSummary'),
+  giftCardMatches: document.querySelector('#giftCardMatches'),
+  giftCardList: document.querySelector('#giftCardList'),
   debtName: document.querySelector('#debtName'),
   debtDate: document.querySelector('#debtDate'),
   debtBalance: document.querySelector('#debtBalance'),
@@ -100,6 +112,22 @@ function migrateState(savedState) {
   next.importHistory = Array.isArray(next.importHistory) && next.importHistory.length
     ? next.importHistory
     : importHistoryFromTransactions(next.transactions);
+  next.giftCards = (next.giftCards || []).map((giftCard) => ({
+    id: makeId(),
+    date: new Date().toISOString().slice(0, 10),
+    provider: '',
+    amount: 0,
+    cardType: '',
+    category: 'Gift Cards',
+    purpose: '',
+    person: '',
+    notes: '',
+    status: 'Pending',
+    matchedTransactionId: '',
+    createdAt: new Date().toISOString(),
+    ...giftCard,
+    amount: Number(giftCard.amount) || 0,
+  }));
   next.debts = (next.debts || []).map((debt) => ({
     id: makeId(),
     name: 'Debt',
@@ -308,6 +336,134 @@ function isExcludedFromCalculations(transaction) {
   return excludedCalculationCategories.includes(transaction.category);
 }
 
+function addGiftCard() {
+  const provider = el.giftCardProvider.value.trim();
+  const amount = Number.parseFloat(el.giftCardAmount.value);
+  const cardType = el.giftCardType.value.trim();
+  const date = el.giftCardDate.value || new Date().toISOString().slice(0, 10);
+  const purpose = el.giftCardPurpose.value.trim();
+  const person = el.giftCardPerson.value.trim();
+  const notes = el.giftCardNotes.value.trim();
+
+  if (!provider || Number.isNaN(amount) || !cardType) {
+    showNotice('Add a provider, amount, and card type for the gift card.');
+    return;
+  }
+
+  commit({
+    ...state,
+    giftCards: [
+      {
+        id: makeId(),
+        date,
+        provider,
+        amount,
+        cardType,
+        category: 'Gift Cards',
+        purpose,
+        person,
+        notes,
+        status: 'Pending',
+        matchedTransactionId: '',
+        createdAt: new Date().toISOString(),
+      },
+      ...(state.giftCards || []),
+    ],
+    purposes: purpose && !state.purposes.includes(purpose) ? [...state.purposes, purpose] : state.purposes,
+    people: person && !state.people.includes(person) ? [...state.people, person] : state.people,
+  });
+
+  el.giftCardProvider.value = '';
+  el.giftCardAmount.value = '';
+  el.giftCardType.value = '';
+  el.giftCardPurpose.value = '';
+  el.giftCardPerson.value = '';
+  el.giftCardNotes.value = '';
+}
+
+function updateGiftCardStatus(id, status) {
+  commit({
+    ...state,
+    giftCards: (state.giftCards || []).map((giftCard) =>
+      giftCard.id === id
+        ? { ...giftCard, status, matchedTransactionId: status === 'Pending' ? '' : giftCard.matchedTransactionId }
+        : giftCard
+    ),
+  });
+}
+
+function deleteGiftCard(id) {
+  commit({ ...state, giftCards: (state.giftCards || []).filter((giftCard) => giftCard.id !== id) });
+}
+
+function daysBetween(start, end) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return Number.POSITIVE_INFINITY;
+  return Math.round((endDate - startDate) / 86400000);
+}
+
+function providerMatches(giftCard, transaction) {
+  const text = `${transaction.description} ${transaction.account}`.toLowerCase();
+  const providerWords = giftCard.provider
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 3);
+  const knownGiftCardMerchants = ['woolworths', 'coles', 'qantas', 'marketplace', 'gift'];
+  return [...providerWords, ...knownGiftCardMerchants].some((word) => text.includes(word));
+}
+
+function giftCardMatchCandidates(giftCard) {
+  if (giftCard.status !== 'Pending') return [];
+
+  return state.transactions
+    .filter((transaction) => transaction.amount < 0)
+    .filter((transaction) => !(state.giftCards || []).some((card) => card.matchedTransactionId === transaction.id))
+    .map((transaction) => {
+      const amountDifference = Math.abs(Math.abs(transaction.amount) - Math.abs(giftCard.amount));
+      const dayDifference = daysBetween(giftCard.date, transaction.date);
+      const merchantMatch = providerMatches(giftCard, transaction);
+      let score = 0;
+      if (amountDifference < 0.01) score += 60;
+      else if (amountDifference <= 2) score += 35;
+      else if (amountDifference <= 10) score += 15;
+      if (dayDifference >= 0 && dayDifference <= 45) score += 25;
+      if (dayDifference >= 0 && dayDifference <= 7) score += 10;
+      if (merchantMatch) score += 20;
+      return { transaction, amountDifference, dayDifference, merchantMatch, score };
+    })
+    .filter((candidate) => candidate.dayDifference >= -3 && candidate.dayDifference <= 60)
+    .filter((candidate) => candidate.score >= 55)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}
+
+function applyGiftCardMatch(giftCardId, transactionId) {
+  const giftCard = state.giftCards.find((card) => card.id === giftCardId);
+  if (!giftCard) return;
+
+  commit({
+    ...state,
+    transactions: state.transactions.map((transaction) =>
+      transaction.id === transactionId
+        ? {
+            ...transaction,
+            category: 'Gift Cards',
+            purpose: giftCard.purpose || transaction.purpose,
+            person: giftCard.person || transaction.person,
+            notes: [transaction.notes, `Matched gift card: ${giftCard.cardType}`].filter(Boolean).join(' | '),
+          }
+        : transaction
+    ),
+    giftCards: state.giftCards.map((card) =>
+      card.id === giftCardId
+        ? { ...card, status: 'Matched', matchedTransactionId: transactionId }
+        : card
+    ),
+  });
+  showNotice(`Matched ${giftCard.cardType} gift card to statement transaction.`);
+}
+
 function addDebt() {
   const name = el.debtName.value.trim();
   const date = el.debtDate.value || new Date().toISOString().slice(0, 10);
@@ -433,7 +589,7 @@ function importBackup(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      commit({ ...initialState, ...JSON.parse(reader.result) });
+      commit(migrateState({ ...initialState, ...JSON.parse(reader.result) }));
       showNotice('Backup restored.');
     } catch {
       showNotice('That backup file could not be read.');
@@ -569,6 +725,68 @@ function renderDebts() {
   `).join('') : '';
 }
 
+function renderGiftCards() {
+  const giftCards = [...(state.giftCards || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const pending = giftCards.filter((giftCard) => giftCard.status === 'Pending');
+  const matched = giftCards.filter((giftCard) => giftCard.status === 'Matched');
+  const pendingTotal = pending.reduce((sum, giftCard) => sum + giftCard.amount, 0);
+
+  el.giftCardSummary.innerHTML = `
+    <div class="gift-card-stat">
+      <span>Pending value</span>
+      <strong>${money(pendingTotal)}</strong>
+    </div>
+    <div class="gift-card-stat">
+      <span>Pending</span>
+      <strong>${pending.length}</strong>
+    </div>
+    <div class="gift-card-stat">
+      <span>Matched</span>
+      <strong>${matched.length}</strong>
+    </div>
+  `;
+
+  const matchRows = pending.flatMap((giftCard) =>
+    giftCardMatchCandidates(giftCard).map((candidate) => ({ giftCard, ...candidate }))
+  );
+
+  el.giftCardMatches.innerHTML = matchRows.length ? matchRows.map(({ giftCard, transaction, dayDifference, merchantMatch }) => `
+    <article class="gift-card-match">
+      <div>
+        <strong>${escapeHtml(giftCard.cardType)}</strong>
+        <span>${escapeHtml(giftCard.provider)} ${money(giftCard.amount)} bought ${escapeHtml(giftCard.date)}</span>
+      </div>
+      <div>
+        <strong>${escapeHtml(transaction.description)}</strong>
+        <span>${money(Math.abs(transaction.amount))} on ${escapeHtml(transaction.date)}${merchantMatch ? ' · merchant looks right' : ''}${Number.isFinite(dayDifference) ? ` · ${dayDifference} days later` : ''}</span>
+      </div>
+      <button type="button" data-match-gift-card="${escapeHtml(giftCard.id)}" data-match-transaction="${escapeHtml(transaction.id)}">Apply match</button>
+    </article>
+  `).join('') : '<p class="empty-history">No possible gift card matches right now.</p>';
+
+  el.giftCardList.innerHTML = giftCards.length ? giftCards.map((giftCard) => `
+    <article class="gift-card-item ${giftCard.status === 'Matched' ? 'is-matched' : ''}">
+      <div>
+        <strong>${escapeHtml(giftCard.cardType)}</strong>
+        <span>${escapeHtml(giftCard.provider)} · ${escapeHtml(giftCard.date)}</span>
+        <div class="chip-row">
+          <span class="chip chip-gift-cards">${escapeHtml(giftCard.status)}</span>
+          ${giftCard.purpose ? `<span class="${chipClass(giftCard.purpose)}">${escapeHtml(giftCard.purpose)}</span>` : ''}
+          ${giftCard.person ? `<span class="${chipClass(giftCard.person)}">${escapeHtml(giftCard.person)}</span>` : ''}
+        </div>
+        ${giftCard.notes ? `<small>${escapeHtml(giftCard.notes)}</small>` : ''}
+      </div>
+      <b>${money(giftCard.amount)}</b>
+      <div class="gift-card-actions">
+        ${giftCard.status === 'Pending'
+          ? `<button type="button" data-gift-status="${escapeHtml(giftCard.id)}" data-status="Used">Used</button>`
+          : `<button type="button" data-gift-status="${escapeHtml(giftCard.id)}" data-status="Pending">Reopen</button>`}
+        <button type="button" data-delete-gift-card="${escapeHtml(giftCard.id)}">Remove</button>
+      </div>
+    </article>
+  `).join('') : '<p class="empty-history">No gift cards recorded yet.</p>';
+}
+
 function renderImportHistory() {
   const history = [...(state.importHistory || [])]
     .sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))
@@ -662,6 +880,7 @@ function render() {
   renderHorizontalChart(el.purposeChart, Object.entries(byPurpose), {
     emptyText: 'No purpose data yet.',
   });
+  renderGiftCards();
   renderDebts();
   renderImportHistory();
 
@@ -702,6 +921,8 @@ function render() {
 el.csvInput.addEventListener('change', (event) => handleFiles(event.target.files));
 el.backupBtn.addEventListener('click', exportBackup);
 el.backupInput.addEventListener('change', (event) => importBackup(event.target.files[0]));
+el.giftCardDate.value = new Date().toISOString().slice(0, 10);
+el.addGiftCardBtn.addEventListener('click', addGiftCard);
 el.debtDate.value = new Date().toISOString().slice(0, 10);
 el.addDebtBtn.addEventListener('click', addDebt);
 el.addRuleBtn.addEventListener('click', addRule);
@@ -742,6 +963,18 @@ el.transactionRows.addEventListener('change', (event) => {
   const id = event.target.dataset.transaction;
   const field = event.target.dataset.field;
   if (id && field) updateTransaction(id, field, event.target.value);
+});
+el.giftCardMatches.addEventListener('click', (event) => {
+  const giftCardId = event.target.dataset.matchGiftCard;
+  const transactionId = event.target.dataset.matchTransaction;
+  if (giftCardId && transactionId) applyGiftCardMatch(giftCardId, transactionId);
+});
+el.giftCardList.addEventListener('click', (event) => {
+  const statusId = event.target.dataset.giftStatus;
+  const status = event.target.dataset.status;
+  const deleteId = event.target.dataset.deleteGiftCard;
+  if (statusId && status) updateGiftCardStatus(statusId, status);
+  if (deleteId) deleteGiftCard(deleteId);
 });
 el.debtList.addEventListener('click', (event) => {
   const id = event.target.dataset.deleteDebt;
