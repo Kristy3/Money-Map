@@ -25,7 +25,7 @@ const initialState = {
   debts: [],
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'School Fees', 'Transfer', 'Work', 'Insurance', 'Fees', 'Car', 'Tax', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
-  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
+  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Orthodontics', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
   people: ['Connor', 'Family', 'Home', 'Personal', 'Martin', 'Adam', 'Jacob', 'Kristy', 'Kids'],
 };
 
