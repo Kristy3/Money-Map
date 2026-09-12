@@ -252,6 +252,40 @@ small,
   padding: 12px 14px;
 }
 
+.import-history-panel {
+  margin: 14px 0;
+}
+
+.import-history {
+  display: grid;
+  gap: 8px;
+}
+
+.import-history-item {
+  align-items: center;
+  background: #f8fbff;
+  border: 1px solid #dbe7f7;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) 90px 120px;
+  padding: 10px;
+}
+
+.import-history-item strong {
+  display: block;
+}
+
+.import-history-item span,
+.empty-history {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.import-history-item b {
+  display: block;
+}
+
 .metrics {
   display: grid;
   gap: 12px;
@@ -735,6 +769,7 @@ td select {
   }
 
   .chart-row,
+  .import-history-item,
   .debt-item {
     grid-template-columns: 1fr;
   }

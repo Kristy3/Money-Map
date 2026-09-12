@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Money Map</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260816-fuel-purpose" />
+    <link rel="stylesheet" href="src/styles.css?v=20260912-import-history" />
   </head>
   <body>
     <main>
@@ -50,6 +50,16 @@
       </section>
 
       <div id="notice" class="notice hidden"></div>
+
+      <section class="panel import-history-panel">
+        <div class="panel-title">
+          <div>
+            <h2>Imported CSVs</h2>
+            <p>Recent statement files loaded into Money Map.</p>
+          </div>
+        </div>
+        <div id="importHistory" class="import-history"></div>
+      </section>
 
       <section class="metrics">
         <div>
@@ -190,6 +200,6 @@
         </section>
       </section>
     </main>
-    <script src="src/app.js?v=20260816-fuel-purpose"></script>
+    <script src="src/app.js?v=20260912-import-history"></script>
   </body>
 </html>

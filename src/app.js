@@ -21,6 +21,7 @@ const defaultRules = [
 
 const initialState = {
   transactions: [],
+  importHistory: [],
   debts: [],
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'Transfer', 'Work', 'Insurance', 'Fees', 'Car', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
@@ -43,6 +44,7 @@ const el = {
   reviewMetric: document.querySelector('#reviewMetric'),
   heroMonth: document.querySelector('#heroMonth'),
   heroInsight: document.querySelector('#heroInsight'),
+  importHistory: document.querySelector('#importHistory'),
   monthlyChart: document.querySelector('#monthlyChart'),
   categoryChart: document.querySelector('#categoryChart'),
   purposeChart: document.querySelector('#purposeChart'),
@@ -95,6 +97,9 @@ function migrateState(savedState) {
     purpose: '',
     ...transaction,
   }));
+  next.importHistory = Array.isArray(next.importHistory) && next.importHistory.length
+    ? next.importHistory
+    : importHistoryFromTransactions(next.transactions);
   next.debts = (next.debts || []).map((debt) => ({
     id: makeId(),
     name: 'Debt',
@@ -114,6 +119,29 @@ function migrateState(savedState) {
   next.purposes = [...new Set([...cloneInitialState().purposes, ...(next.purposes || [])])];
   next.people = [...new Set([...cloneInitialState().people, ...(next.people || [])])];
   return next;
+}
+
+function importHistoryFromTransactions(transactions) {
+  const grouped = transactions.reduce((groups, transaction) => {
+    const fileName = transaction.sourceFile || 'Unknown CSV';
+    const existing = groups[fileName] || {
+      id: makeId(),
+      fileName,
+      importedAt: transaction.importedAt || '',
+      importedCount: 0,
+      duplicateCount: 0,
+      totalRows: 0,
+    };
+    existing.importedCount += 1;
+    existing.totalRows += 1;
+    if (!existing.importedAt || transaction.importedAt > existing.importedAt) {
+      existing.importedAt = transaction.importedAt || existing.importedAt;
+    }
+    groups[fileName] = existing;
+    return groups;
+  }, {});
+
+  return Object.values(grouped).sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)));
 }
 
 function commit(nextState) {
@@ -256,6 +284,16 @@ function money(value) {
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(value || 0);
 }
 
+function formatDateTime(value) {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-AU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 function shortMoney(value) {
   const abs = Math.abs(value || 0);
   if (abs >= 1000) return `$${Math.round(abs / 100) / 10}k`;
@@ -357,8 +395,23 @@ function handleFiles(files) {
       const imported = mapCsvRows(parseCsv(reader.result), file.name);
       const existing = new Set(state.transactions.map((transaction) => transaction.fingerprint));
       const unique = imported.filter((transaction) => !existing.has(transaction.fingerprint));
-      commit({ ...state, transactions: [...unique, ...state.transactions] });
-      showNotice(`Imported ${unique.length} new transactions from ${file.name}. Skipped ${imported.length - unique.length} duplicates.`);
+      const duplicateCount = imported.length - unique.length;
+      commit({
+        ...state,
+        transactions: [...unique, ...state.transactions],
+        importHistory: [
+          {
+            id: makeId(),
+            fileName: file.name,
+            importedAt: new Date().toISOString(),
+            importedCount: unique.length,
+            duplicateCount,
+            totalRows: imported.length,
+          },
+          ...(state.importHistory || []),
+        ],
+      });
+      showNotice(`Imported ${unique.length} new transactions from ${file.name}. Skipped ${duplicateCount} duplicates.`);
     };
     reader.onerror = () => showNotice(`Could not import ${file.name}.`);
     reader.readAsText(file);
@@ -516,6 +569,29 @@ function renderDebts() {
   `).join('') : '';
 }
 
+function renderImportHistory() {
+  const history = [...(state.importHistory || [])]
+    .sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))
+    .slice(0, 8);
+
+  el.importHistory.innerHTML = history.length ? history.map((item) => `
+    <article class="import-history-item">
+      <div>
+        <strong>${escapeHtml(item.fileName)}</strong>
+        <span>${escapeHtml(formatDateTime(item.importedAt))}</span>
+      </div>
+      <div>
+        <b>${item.importedCount || 0}</b>
+        <span>new</span>
+      </div>
+      <div>
+        <b>${item.duplicateCount || 0}</b>
+        <span>duplicates</span>
+      </div>
+    </article>
+  `).join('') : '<p class="empty-history">No CSV imports recorded yet.</p>';
+}
+
 function render() {
   const filtered = filteredTransactions();
   const calculated = filtered.filter((transaction) => !isExcludedFromCalculations(transaction));
@@ -587,6 +663,7 @@ function render() {
     emptyText: 'No purpose data yet.',
   });
   renderDebts();
+  renderImportHistory();
 
   el.transactionRows.innerHTML = filtered.length ? filtered.map((transaction) => `
     <tr>
