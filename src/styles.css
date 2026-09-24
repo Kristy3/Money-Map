@@ -601,7 +601,7 @@ small,
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 155px 170px 170px;
+  grid-template-columns: minmax(220px, 1fr) 145px 155px 155px minmax(190px, 1fr);
   margin-bottom: 16px;
 }
 
@@ -799,6 +799,17 @@ td select {
 .chip-clothing {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.chip-tolls,
+.chip-travel {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.chip-kids-activities {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .chip-dining,

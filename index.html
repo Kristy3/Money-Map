@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Money Map</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260912-donations-medical" />
+    <link rel="stylesheet" href="src/styles.css?v=20260924-faster-review-filter" />
   </head>
   <body>
     <main>
@@ -195,6 +195,14 @@
               <span>Purpose</span>
               <select id="purposeSelect"></select>
             </label>
+            <label>
+              <span>Review status</span>
+              <select id="reviewSelect">
+                <option value="all">All transactions</option>
+                <option value="needs-review">Needs category or purpose</option>
+                <option value="complete">Fully assigned</option>
+              </select>
+            </label>
           </div>
 
           <div id="categoryBars" class="category-bars"></div>
@@ -226,6 +234,6 @@
         </section>
       </section>
     </main>
-    <script src="src/app.js?v=20260912-donations-medical"></script>
+    <script src="src/app.js?v=20260924-faster-review-filter"></script>
   </body>
 </html>

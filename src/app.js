@@ -26,12 +26,12 @@ const initialState = {
   giftCards: [],
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'School Fees', 'Transfer', 'Work', 'Insurance', 'Fees', 'Car', 'Tax', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
-  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Donations', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Orthodontics', 'Medical', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
+  purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Donations', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Tolls', 'Travel', 'Kids Activities', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Orthodontics', 'Medical', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
   people: ['Connor', 'Family', 'Home', 'Personal', 'Martin', 'Adam', 'Jacob', 'Kristy', 'Kids'],
 };
 
 let state = loadState();
-let filters = { query: '', month: 'all', category: 'all', purpose: 'all' };
+let filters = { query: '', month: 'all', category: 'all', purpose: 'all', review: 'all' };
 
 const el = {
   backupBtn: document.querySelector('#backupBtn'),
@@ -78,6 +78,7 @@ const el = {
   monthSelect: document.querySelector('#monthSelect'),
   categorySelect: document.querySelector('#categorySelect'),
   purposeSelect: document.querySelector('#purposeSelect'),
+  reviewSelect: document.querySelector('#reviewSelect'),
   categoryBars: document.querySelector('#categoryBars'),
   categories: document.querySelector('#categories'),
   purposes: document.querySelector('#purposes'),
@@ -172,10 +173,10 @@ function importHistoryFromTransactions(transactions) {
   return Object.values(grouped).sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)));
 }
 
-function commit(nextState) {
+function commit(nextState, renderOptions) {
   state = nextState;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  render();
+  render(renderOptions);
 }
 
 function showNotice(message) {
@@ -486,27 +487,42 @@ function deleteDebt(id) {
   commit({ ...state, debts: state.debts.filter((debt) => debt.id !== id) });
 }
 
+function needsReview(transaction) {
+  return !transaction.category || transaction.category === 'Uncategorised' || !transaction.purpose;
+}
+
+function transactionMatchesFilters(transaction) {
+  if (filters.month !== 'all' && monthKey(transaction.date) !== filters.month) return false;
+  if (filters.category !== 'all' && transaction.category !== filters.category) return false;
+  if (filters.purpose !== 'all' && transaction.purpose !== filters.purpose) return false;
+  if (filters.review === 'needs-review' && !needsReview(transaction)) return false;
+  if (filters.review === 'complete' && needsReview(transaction)) return false;
+
+  const haystack = `${transaction.description} ${transaction.category} ${transaction.purpose} ${transaction.person} ${transaction.account}`.toLowerCase();
+  return haystack.includes(filters.query.toLowerCase());
+}
+
 function filteredTransactions() {
   return state.transactions
-    .filter((transaction) => filters.month === 'all' || monthKey(transaction.date) === filters.month)
-    .filter((transaction) => filters.category === 'all' || transaction.category === filters.category)
-    .filter((transaction) => filters.purpose === 'all' || transaction.purpose === filters.purpose)
-    .filter((transaction) => {
-      const haystack = `${transaction.description} ${transaction.category} ${transaction.purpose} ${transaction.person} ${transaction.account}`.toLowerCase();
-      return haystack.includes(filters.query.toLowerCase());
-    })
+    .filter(transactionMatchesFilters)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
 function updateTransaction(id, field, value) {
+  let updatedTransaction;
   const next = {
     ...state,
-    transactions: state.transactions.map((transaction) => (transaction.id === id ? { ...transaction, [field]: value } : transaction)),
+    transactions: state.transactions.map((transaction) => {
+      if (transaction.id !== id) return transaction;
+      updatedTransaction = { ...transaction, [field]: value };
+      return updatedTransaction;
+    }),
     categories: field === 'category' && value && !state.categories.includes(value) ? [...state.categories, value] : state.categories,
     purposes: field === 'purpose' && value && !state.purposes.includes(value) ? [...state.purposes, value] : state.purposes,
     people: field === 'person' && value && !state.people.includes(value) ? [...state.people, value] : state.people,
   };
-  commit(next);
+  commit(next, { renderTransactionRows: !updatedTransaction || !transactionMatchesFilters(updatedTransaction) });
+  return updatedTransaction;
 }
 
 function addRule() {
@@ -619,6 +635,15 @@ function sortLabels(values) {
 
 function chipClass(value) {
   return `chip chip-${String(value || 'empty').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+function transactionChips(transaction) {
+  return `
+    <span class="${chipClass(transaction.category)}">${escapeHtml(transaction.category || 'Uncategorised')}</span>
+    ${transaction.purpose ? `<span class="${chipClass(transaction.purpose)}">${escapeHtml(transaction.purpose)}</span>` : ''}
+    ${transaction.person ? `<span class="${chipClass(transaction.person)}">${escapeHtml(transaction.person)}</span>` : ''}
+    ${isExcludedFromCalculations(transaction) ? '<span class="chip chip-excluded">Excluded</span>' : ''}
+  `;
 }
 
 function escapeHtml(value) {
@@ -810,7 +835,7 @@ function renderImportHistory() {
   `).join('') : '<p class="empty-history">No CSV imports recorded yet.</p>';
 }
 
-function render() {
+function render({ renderTransactionRows = true } = {}) {
   const filtered = filteredTransactions();
   const calculated = filtered.filter((transaction) => !isExcludedFromCalculations(transaction));
   const expenses = calculated.filter((transaction) => transaction.amount < 0).reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
@@ -826,7 +851,7 @@ function render() {
     (transaction) => transaction.purpose || 'No purpose',
     (transaction) => Math.abs(transaction.amount)
   );
-  const reviewCount = state.transactions.filter((transaction) => transaction.category === 'Uncategorised' || !transaction.purpose).length;
+  const reviewCount = state.transactions.filter(needsReview).length;
   const latestMonth = [...new Set(state.transactions.map((transaction) => monthKey(transaction.date)).filter((item) => item !== 'No date'))].sort().at(-1);
   const topCategory = Object.entries(byCategory)
     .filter(([, total]) => total < 0)
@@ -884,17 +909,14 @@ function render() {
   renderDebts();
   renderImportHistory();
 
-  el.transactionRows.innerHTML = filtered.length ? filtered.map((transaction) => `
+  if (renderTransactionRows) el.transactionRows.innerHTML = filtered.length ? filtered.map((transaction) => `
     <tr>
       <td>${escapeHtml(transaction.date)}</td>
       <td>
         <strong>${escapeHtml(transaction.description)}</strong>
         <small>${escapeHtml(transaction.sourceFile)}</small>
         <div class="chip-row">
-          <span class="${chipClass(transaction.category)}">${escapeHtml(transaction.category || 'Uncategorised')}</span>
-          ${transaction.purpose ? `<span class="${chipClass(transaction.purpose)}">${escapeHtml(transaction.purpose)}</span>` : ''}
-          ${transaction.person ? `<span class="${chipClass(transaction.person)}">${escapeHtml(transaction.person)}</span>` : ''}
-          ${isExcludedFromCalculations(transaction) ? '<span class="chip chip-excluded">Excluded</span>' : ''}
+          ${transactionChips(transaction)}
         </div>
       </td>
       <td class="${transaction.amount < 0 ? 'negative' : 'positive'}">${money(transaction.amount)}</td>
@@ -943,6 +965,10 @@ el.purposeSelect.addEventListener('change', (event) => {
   filters.purpose = event.target.value;
   render();
 });
+el.reviewSelect.addEventListener('change', (event) => {
+  filters.review = event.target.value;
+  render();
+});
 el.dropZone.addEventListener('dragover', (event) => {
   event.preventDefault();
   el.dropZone.classList.add('dragging');
@@ -962,7 +988,14 @@ el.ruleList.addEventListener('click', (event) => {
 el.transactionRows.addEventListener('change', (event) => {
   const id = event.target.dataset.transaction;
   const field = event.target.dataset.field;
-  if (id && field) updateTransaction(id, field, event.target.value);
+  if (id && field) {
+    const row = event.target.closest('tr');
+    const updatedTransaction = updateTransaction(id, field, event.target.value);
+    const chipRow = row?.querySelector('.chip-row');
+    if (chipRow && updatedTransaction && transactionMatchesFilters(updatedTransaction)) {
+      chipRow.innerHTML = transactionChips(updatedTransaction);
+    }
+  }
 });
 el.giftCardMatches.addEventListener('click', (event) => {
   const giftCardId = event.target.dataset.matchGiftCard;
