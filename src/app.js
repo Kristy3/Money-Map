@@ -20,10 +20,24 @@ const defaultRules = [
 ];
 
 const initialState = {
+  schemaVersion: 2,
   transactions: [],
   importHistory: [],
   debts: [],
   giftCards: [],
+  accounts: [],
+  properties: [],
+  assets: [],
+  superAccounts: [],
+  liabilities: [],
+  incomeSources: [],
+  recurringExpenses: [],
+  irregularExpenses: [],
+  savingsGoals: [],
+  financialGoals: [],
+  insurancePolicies: [],
+  netWorthSnapshots: [],
+  settings: { emergencyTargetMonths: 6 },
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'School Fees', 'Transfer', 'Work', 'Insurance', 'Fees', 'Car', 'Tax', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
   purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Donations', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Tolls', 'Travel', 'Kids Activities', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Orthodontics', 'Medical', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
@@ -32,6 +46,7 @@ const initialState = {
 
 let state = loadState();
 let filters = { query: '', month: 'all', category: 'all', purpose: 'all', review: 'all' };
+let activeScenario = 'current';
 
 const el = {
   backupBtn: document.querySelector('#backupBtn'),
@@ -85,12 +100,50 @@ const el = {
   people: document.querySelector('#people'),
   transactionRows: document.querySelector('#transactionRows'),
   dropZone: document.querySelector('#dropZone'),
+  nav: document.querySelector('.app-nav'),
+  scenarioSelect: document.querySelector('#scenarioSelect'),
+  netWorthHero: document.querySelector('#netWorthHero'),
+  netWorthMetric: document.querySelector('#netWorthMetric'),
+  netWorthChange: document.querySelector('#netWorthChange'),
+  assetsMetric: document.querySelector('#assetsMetric'),
+  liabilitiesMetric: document.querySelector('#liabilitiesMetric'),
+  liquidCashMetric: document.querySelector('#liquidCashMetric'),
+  monthlyIncomeMetric: document.querySelector('#monthlyIncomeMetric'),
+  monthlyExpenseMetric: document.querySelector('#monthlyExpenseMetric'),
+  monthlyBufferMetric: document.querySelector('#monthlyBufferMetric'),
+  savingsRateMetric: document.querySelector('#savingsRateMetric'),
+  incomeSourceNote: document.querySelector('#incomeSourceNote'),
+  affordabilityHeadline: document.querySelector('#affordabilityHeadline'),
+  affordabilityStatus: document.querySelector('#affordabilityStatus'),
+  affordabilityBreakdown: document.querySelector('#affordabilityBreakdown'),
+  affordabilityRatios: document.querySelector('#affordabilityRatios'),
+  netWorthChart: document.querySelector('#netWorthChart'),
+  forecastChart: document.querySelector('#forecastChart'),
+  portfolioChart: document.querySelector('#portfolioChart'),
+  forecastRows: document.querySelector('#forecastRows'),
+  emergencySummary: document.querySelector('#emergencySummary'),
+  emergencyTargetMonths: document.querySelector('#emergencyTargetMonths'),
+  financialSignals: document.querySelector('#financialSignals'),
+  snapshotBtn: document.querySelector('#snapshotBtn'),
+  incomeList: document.querySelector('#incomeList'),
+  expenseList: document.querySelector('#expenseList'),
+  irregularExpenseList: document.querySelector('#irregularExpenseList'),
+  accountList: document.querySelector('#accountList'),
+  propertyList: document.querySelector('#propertyList'),
+  assetList: document.querySelector('#assetList'),
+  superList: document.querySelector('#superList'),
+  liabilityList: document.querySelector('#liabilityList'),
+  savingsGoalList: document.querySelector('#savingsGoalList'),
+  financialGoalList: document.querySelector('#financialGoalList'),
+  insuranceList: document.querySelector('#insuranceList'),
+  propertyOffsetAccountId: document.querySelector('#propertyOffsetAccountId'),
+  goalAccountId: document.querySelector('#goalAccountId'),
 };
 
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? migrateState({ ...initialState, ...JSON.parse(saved) }) : cloneInitialState();
+    return saved ? migrateState(JSON.parse(saved)) : cloneInitialState();
   } catch {
     return cloneInitialState();
   }
@@ -101,6 +154,7 @@ function cloneInitialState() {
 }
 
 function migrateState(savedState) {
+  const sourceVersion = Number(savedState.schemaVersion || 1);
   const next = {
     ...cloneInitialState(),
     ...savedState,
@@ -137,6 +191,29 @@ function migrateState(savedState) {
     ...debt,
     balance: Number(debt.balance) || 0,
   }));
+  const financialCollections = [
+    'accounts', 'properties', 'assets', 'superAccounts', 'liabilities', 'incomeSources', 'recurringExpenses',
+    'irregularExpenses', 'savingsGoals', 'financialGoals', 'insurancePolicies', 'netWorthSnapshots',
+  ];
+  financialCollections.forEach((collection) => {
+    next[collection] = Array.isArray(next[collection]) ? next[collection] : [];
+  });
+  if (sourceVersion < 2 && !next.liabilities.length && next.debts.length) {
+    const latestLegacyDebts = {};
+    next.debts.forEach((debt) => {
+      if (!latestLegacyDebts[debt.name] || debt.date > latestLegacyDebts[debt.name].date) latestLegacyDebts[debt.name] = debt;
+    });
+    next.liabilities = Object.values(latestLegacyDebts).map((debt) => ({
+      id: makeId(), name: debt.name, type: 'Other', currentBalance: Number(debt.balance) || 0,
+      requiredRepayment: 0, repaymentFrequency: 'monthly', scenarioScope: 'both', soloPercent: 100,
+      migratedFromDebtHistory: true,
+    }));
+  }
+  financialCollections.filter((collection) => collection !== 'netWorthSnapshots').forEach((collection) => {
+    next[collection] = next[collection].map((record) => ({ scenarioScope: 'both', soloPercent: 100, ...record }));
+  });
+  next.settings = { ...cloneInitialState().settings, ...(next.settings || {}) };
+  next.schemaVersion = 2;
   const savedRules = (next.rules || []).map((rule) => ({
     purpose: '',
     ...rule,
@@ -323,12 +400,6 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function shortMoney(value) {
-  const abs = Math.abs(value || 0);
-  if (abs >= 1000) return `$${Math.round(abs / 100) / 10}k`;
-  return money(abs).replace('.00', '');
-}
-
 function monthKey(date) {
   return date?.slice(0, 7) || 'No date';
 }
@@ -474,9 +545,14 @@ function addDebt() {
     return;
   }
 
-  commit({
+  const existingLiability = state.liabilities.find((liability) => liability.name.toLowerCase() === name.toLowerCase());
+  const liabilities = existingLiability
+    ? state.liabilities.map((liability) => liability.id === existingLiability.id ? { ...liability, currentBalance: Math.abs(balance) } : liability)
+    : [{ id: makeId(), name, type: 'Other', currentBalance: Math.abs(balance), requiredRepayment: 0, repaymentFrequency: 'monthly', scenarioScope: 'both', soloPercent: 100 }, ...state.liabilities];
+  commitFinancial({
     ...state,
     debts: [{ id: makeId(), name, date, balance }, ...state.debts],
+    liabilities,
   });
   el.debtName.value = '';
   el.debtDate.value = new Date().toISOString().slice(0, 10);
@@ -605,13 +681,174 @@ function importBackup(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      commit(migrateState({ ...initialState, ...JSON.parse(reader.result) }));
+      commit(migrateState(JSON.parse(reader.result)));
       showNotice('Backup restored.');
     } catch {
       showNotice('That backup file could not be read.');
     }
   };
   reader.readAsText(file);
+}
+
+const frequencyLabels = {
+  weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly', quarterly: 'Quarterly',
+  'half-yearly': 'Half-yearly', annual: 'Annual', 'one-off': 'One-off',
+};
+
+const scenarioScopeLabels = {
+  both: 'Both scenarios', 'current-only': 'Current only', 'solo-only': 'Future / Solo only', percentage: 'Current + Solo percentage',
+};
+
+function initialiseFormOptions() {
+  document.querySelectorAll('[data-frequency]').forEach((select) => {
+    const selected = select.dataset.default || select.value || 'monthly';
+    select.innerHTML = Object.entries(frequencyLabels).map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`).join('');
+  });
+  document.querySelectorAll('[data-scenario-scope]').forEach((select) => {
+    select.innerHTML = Object.entries(scenarioScopeLabels).map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  });
+}
+
+function todayKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function withNetWorthSnapshots(nextState) {
+  const hasFinancialData = ['accounts', 'properties', 'assets', 'superAccounts', 'liabilities'].some((collection) => nextState[collection]?.length);
+  if (!hasFinancialData) return nextState;
+  const date = todayKey();
+  const snapshots = [...(nextState.netWorthSnapshots || [])];
+  ['current', 'solo'].forEach((scenario) => {
+    const summary = MoneyMapFinance.dashboardSummary(nextState, scenario);
+    const snapshot = {
+      id: snapshots.find((item) => item.date === date && item.scenario === scenario)?.id || makeId(),
+      date,
+      scenario,
+      netWorth: summary.netWorth,
+      cash: summary.cash,
+      property: summary.propertyValue,
+      investments: summary.investments,
+      superannuation: summary.superannuation,
+      liabilities: summary.totalLiabilities,
+    };
+    const index = snapshots.findIndex((item) => item.date === date && item.scenario === scenario);
+    if (index >= 0) snapshots[index] = snapshot;
+    else snapshots.push(snapshot);
+  });
+  return { ...nextState, netWorthSnapshots: snapshots };
+}
+
+function commitFinancial(nextState, message) {
+  commit(withNetWorthSnapshots(nextState));
+  if (message) showNotice(message);
+}
+
+function recordFromForm(form) {
+  return [...form.elements].reduce((record, field) => {
+    if (!field.name) return record;
+    if (field.type === 'checkbox') record[field.name] = field.checked;
+    else if (field.type === 'number') record[field.name] = field.value === '' ? 0 : Number(field.value);
+    else record[field.name] = field.value.trim();
+    return record;
+  }, { id: makeId(), createdAt: new Date().toISOString(), active: true });
+}
+
+function validateSavingsAllocation(record) {
+  if (!record.linkedAccountId) return '';
+  const account = state.accounts.find((item) => item.id === record.linkedAccountId);
+  const alreadyAllocated = state.savingsGoals
+    .filter((goal) => goal.linkedAccountId === record.linkedAccountId)
+    .reduce((sum, goal) => sum + (Number(goal.currentAmount) || 0), 0);
+  return alreadyAllocated + (Number(record.currentAmount) || 0) > (Number(account?.balance) || 0)
+    ? 'That would allocate more than the linked account balance across your goals.'
+    : '';
+}
+
+function addFinancialRecord(form) {
+  const collection = form.dataset.addRecord;
+  if (!Array.isArray(state[collection])) return;
+  const record = recordFromForm(form);
+  if (collection === 'accounts' && record.isEmergencyFund) record.isLiquid = true;
+  if (collection === 'properties' && record.offsetAccountId) record.offsetBalance = 0;
+  if (collection === 'liabilities') record.currentBalance = Math.abs(Number(record.currentBalance) || 0);
+  if (collection === 'savingsGoals') {
+    const allocationError = validateSavingsAllocation(record);
+    if (allocationError) {
+      showNotice(allocationError);
+      return;
+    }
+  }
+  commitFinancial({ ...state, [collection]: [record, ...state[collection]] }, 'Financial record added.');
+  form.reset();
+  initialiseFormOptions();
+  form.closest('details')?.removeAttribute('open');
+}
+
+function deleteFinancialRecord(collection, id) {
+  if (!Array.isArray(state[collection])) return;
+  commitFinancial({ ...state, [collection]: state[collection].filter((record) => record.id !== id) }, 'Financial record removed.');
+}
+
+function saveSnapshot() {
+  commit(withNetWorthSnapshots(state));
+  showNotice(`Net worth snapshot saved for ${new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium' }).format(new Date())}.`);
+}
+
+function formatPercent(value, digits = 0) {
+  return `${(Number(value || 0) * 100).toFixed(digits)}%`;
+}
+
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium' }).format(date);
+}
+
+function scenarioLabel(record) {
+  const label = scenarioScopeLabels[record.scenarioScope] || 'Both scenarios';
+  return record.scenarioScope === 'percentage' ? `${label} (${record.soloPercent || 0}% solo)` : label;
+}
+
+function recordRow({ collection, id, title, meta, value, extra = '' }) {
+  return `<article class="record-item"><div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(meta)}</span>${extra}</div><b>${escapeHtml(value)}</b><button type="button" data-delete-record="${escapeHtml(id)}" data-collection="${escapeHtml(collection)}">Remove</button></article>`;
+}
+
+function renderFinancialRecords() {
+  el.incomeList.innerHTML = state.incomeSources.length ? state.incomeSources.map((item) => recordRow({ collection: 'incomeSources', id: item.id, title: item.name, meta: `${item.category} · ${frequencyLabels[item.frequency] || item.frequency} · ${item.incomeBasis || 'net'} · ${scenarioLabel(item)}`, value: `${money(item.amount)} → ${money(MoneyMapFinance.monthlyEquivalent(item.amount, item.frequency))}/mo` })).join('') : '<p class="empty-history">No income sources added. The overview will use your latest imported month until you add a plan.</p>';
+  el.expenseList.innerHTML = state.recurringExpenses.length ? state.recurringExpenses.map((item) => recordRow({ collection: 'recurringExpenses', id: item.id, title: item.name, meta: `${item.category} · ${item.expenseType} · ${frequencyLabels[item.frequency] || item.frequency} · ${scenarioLabel(item)}`, value: `${money(MoneyMapFinance.monthlyEquivalent(item.amount, item.frequency))}/mo` })).join('') : '<p class="empty-history">No regular expenses added.</p>';
+  el.irregularExpenseList.innerHTML = state.irregularExpenses.length ? state.irregularExpenses.map((item) => {
+    const provision = Number(item.monthlyProvision) || MoneyMapFinance.monthlyEquivalent(item.amount, item.frequency);
+    return recordRow({ collection: 'irregularExpenses', id: item.id, title: item.name, meta: `${item.category} · ${item.fundingMode === 'due-date' ? 'full cost in due month' : 'monthly provision'}${item.nextDueDate ? ` · due ${formatDate(item.nextDueDate)}` : ''}`, value: item.fundingMode === 'due-date' ? money(item.amount) : `${money(provision)}/mo` });
+  }).join('') : '<p class="empty-history">No annual or irregular expenses added.</p>';
+  el.accountList.innerHTML = state.accounts.length ? state.accounts.map((item) => recordRow({ collection: 'accounts', id: item.id, title: item.name, meta: `${item.institution || 'No institution'} · ${item.accountType} · ${item.isLiquid ? 'liquid' : 'not liquid'}${item.isEmergencyFund ? ' · emergency fund' : ''} · ${scenarioLabel(item)}`, value: money(item.balance) })).join('') : '<p class="empty-history">No cash or bank accounts added.</p>';
+  el.propertyList.innerHTML = state.properties.length ? state.properties.map((item) => {
+    const ownershipValue = Number(item.marketValue || 0) * Number(item.ownershipPercent || 100) / 100;
+    const offset = item.offsetAccountId ? state.accounts.find((account) => account.id === item.offsetAccountId)?.balance || 0 : item.offsetBalance || 0;
+    return recordRow({ collection: 'properties', id: item.id, title: item.name, meta: `${item.propertyType} · ${item.ownershipPercent || 100}% ownership · mortgage ${money(item.mortgageBalance)} · offset ${money(offset)}`, value: `Share ${money(ownershipValue)}` });
+  }).join('') : '<p class="empty-history">No properties added.</p>';
+  el.assetList.innerHTML = state.assets.length ? state.assets.map((item) => {
+    const gain = Number(item.currentValue || 0) - Number(item.costBase || 0);
+    return recordRow({ collection: 'assets', id: item.id, title: item.name, meta: `${item.assetClass}${item.ticker ? ` · ${item.ticker}` : ''} · ${scenarioLabel(item)}${item.excludeFromNetWorth ? ' · excluded from net worth' : ''}`, value: `${money(item.currentValue)} (${gain >= 0 ? '+' : ''}${money(gain)})` });
+  }).join('') : '<p class="empty-history">No investments or other assets added.</p>';
+  el.superList.innerHTML = state.superAccounts.length ? state.superAccounts.map((item) => recordRow({ collection: 'superAccounts', id: item.id, title: item.fund, meta: `${item.investmentOption || 'Investment option not set'} · ${scenarioLabel(item)}${item.beneficiaryStatus ? ` · ${item.beneficiaryStatus}` : ''}`, value: money(item.balance) })).join('') : '<p class="empty-history">No superannuation funds added.</p>';
+  el.liabilityList.innerHTML = state.liabilities.length ? state.liabilities.map((item) => recordRow({ collection: 'liabilities', id: item.id, title: item.name, meta: `${item.type} · ${item.interestRate || 0}% · ${money(MoneyMapFinance.monthlyEquivalent(item.requiredRepayment, item.repaymentFrequency))}/mo${item.type === 'Credit Card' && item.creditLimit ? ` · ${money(item.creditLimit)} limit` : ''} · ${scenarioLabel(item)}`, value: money(item.currentBalance) })).join('') : '<p class="empty-history">No debts or credit cards added.</p>';
+
+  const goalRows = (collection) => state[collection].map((goal) => {
+    const metrics = MoneyMapFinance.goalMetrics(goal);
+    return `<article class="goal-item"><div class="goal-heading"><div><strong>${escapeHtml(goal.name)}</strong><span>${escapeHtml(goal.goalType || '')}${goal.targetDate ? ` · ${escapeHtml(formatDate(goal.targetDate))}` : ''}</span></div><b>${formatPercent(metrics.progress)}</b></div><div class="progress-track"><i style="width:${metrics.progress * 100}%"></i></div><div class="goal-numbers"><span>${money(goal.currentAmount)} saved</span><span>${money(metrics.remaining)} remaining</span><span>${money(metrics.monthlyRequired)}/mo needed</span></div><button type="button" data-delete-record="${escapeHtml(goal.id)}" data-collection="${collection}">Remove</button></article>`;
+  }).join('');
+  el.savingsGoalList.innerHTML = state.savingsGoals.length ? goalRows('savingsGoals') : '<p class="empty-history">No savings goals added.</p>';
+  el.financialGoalList.innerHTML = state.financialGoals.length ? goalRows('financialGoals') : '<p class="empty-history">No financial goals added.</p>';
+  el.insuranceList.innerHTML = state.insurancePolicies.length ? state.insurancePolicies.map((item) => recordRow({ collection: 'insurancePolicies', id: item.id, title: `${item.policyType} · ${item.provider}`, meta: `${item.renewalDate ? `Renews ${formatDate(item.renewalDate)} · ` : ''}${item.reference || 'No reference'} · ${scenarioLabel(item)}`, value: `${money(MoneyMapFinance.monthlyEquivalent(item.premium, item.premiumFrequency))}/mo` })).join('') : '<p class="empty-history">No insurance policies added.</p>';
+
+  const accountOptions = state.accounts.map((account) => `<option value="${escapeHtml(account.id)}">${escapeHtml(account.name)} · ${money(account.balance)}</option>`).join('');
+  const currentOffset = el.propertyOffsetAccountId.value;
+  const currentGoalAccount = el.goalAccountId.value;
+  el.propertyOffsetAccountId.innerHTML = `<option value="">No linked offset account</option>${state.accounts.filter((account) => account.isOffset || account.accountType === 'Offset').map((account) => `<option value="${escapeHtml(account.id)}">${escapeHtml(account.name)}</option>`).join('')}`;
+  el.goalAccountId.innerHTML = `<option value="">No linked account</option>${accountOptions}`;
+  el.propertyOffsetAccountId.value = currentOffset;
+  el.goalAccountId.value = currentGoalAccount;
 }
 
 function renderOptions(select, options, allLabel) {
@@ -681,7 +918,7 @@ function renderHorizontalChart(container, entries, options = {}) {
   const max = Math.max(...cleaned.map(([, value]) => Math.abs(value)), 1);
   container.className = 'chart';
   container.innerHTML = cleaned.map(([label, value], index) => `
-    <div class="chart-row">
+    <div class="chart-row ${value < 0 ? 'is-negative' : ''}">
       <span>${escapeHtml(label)}</span>
       <div><i style="width: ${(Math.abs(value) / max) * 100}%; --bar-index: ${index};"></i></div>
       <b>${money(value)}</b>
@@ -699,6 +936,87 @@ function renderMonthlyChart(transactions) {
     emptyText: 'Import transactions to see monthly spending.',
     limit: 12,
   });
+}
+
+function formatMonth(value) {
+  if (!/^\d{4}-\d{2}$/.test(value || '')) return value || '';
+  const [year, month] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-AU', { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1));
+}
+
+function renderDashboard() {
+  const summary = MoneyMapFinance.dashboardSummary(state, activeScenario);
+  const forecast = MoneyMapFinance.cashFlowForecast(state, activeScenario);
+  const snapshots = (state.netWorthSnapshots || [])
+    .filter((item) => item.scenario === activeScenario)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const currentSnapshot = snapshots.at(-1);
+  const previousSnapshot = snapshots.length > 1 ? snapshots.at(-2) : null;
+  const change = previousSnapshot ? summary.netWorth - Number(previousSnapshot.netWorth || 0) : 0;
+
+  el.netWorthHero.textContent = summary.totalAssets || summary.totalLiabilities ? `Net worth ${money(summary.netWorth)}` : 'Build your complete Money Map';
+  el.heroInsight.textContent = summary.income
+    ? `${activeScenario === 'solo' ? 'Future / Solo' : 'Current'} monthly buffer is ${money(summary.buffer)}, with ${summary.emergencyRunway.toFixed(1)} months of essential costs accessible for emergencies.`
+    : 'Add accounts, income and regular costs to see whether your money comfortably supports your life.';
+  el.netWorthMetric.textContent = money(summary.netWorth);
+  el.assetsMetric.textContent = money(summary.totalAssets);
+  el.liabilitiesMetric.textContent = money(summary.totalLiabilities);
+  el.liquidCashMetric.textContent = money(summary.liquidCash);
+  el.monthlyIncomeMetric.textContent = money(summary.income);
+  el.monthlyExpenseMetric.textContent = money(summary.expenses);
+  el.monthlyBufferMetric.textContent = money(summary.buffer);
+  el.monthlyBufferMetric.className = summary.buffer < 0 ? 'negative' : 'positive';
+  el.savingsRateMetric.textContent = formatPercent(summary.savingsRate);
+  el.incomeSourceNote.textContent = summary.source === 'plan' ? 'From your income plan' : `From ${summary.sourceMonth ? formatMonth(summary.sourceMonth) : 'latest transactions'}`;
+  el.netWorthChange.textContent = previousSnapshot
+    ? `${change >= 0 ? '+' : ''}${money(change)} since ${formatDate(previousSnapshot.date)}`
+    : currentSnapshot ? `Snapshot saved ${formatDate(currentSnapshot.date)}` : 'No previous snapshot';
+
+  const hasIncome = summary.income > 0;
+  const comfortable = hasIncome && summary.buffer >= summary.income * 0.1;
+  const tight = hasIncome && summary.buffer >= 0 && !comfortable;
+  el.affordabilityHeadline.textContent = !hasIncome ? 'Add reliable income to complete the picture' : comfortable ? 'Your regular income supports this plan' : tight ? 'Your plan fits, with a narrow buffer' : 'Your planned costs exceed regular income';
+  el.affordabilityStatus.textContent = !hasIncome ? 'Needs setup' : comfortable ? 'Comfortable' : tight ? 'Tight' : 'Deficit';
+  el.affordabilityStatus.className = `status-badge ${!hasIncome ? 'neutral' : comfortable ? 'good' : tight ? 'warning' : 'danger'}`;
+  el.affordabilityBreakdown.innerHTML = [
+    ['Net monthly income', summary.income], ['Essential living costs', -summary.essential], ['Debt repayments', -summary.debtRepayments],
+    ['Lifestyle spending', -summary.lifestyle], ['Sinking fund provisions', -summary.sinkingFunds],
+    ['Savings and investments', -(summary.savings + summary.investments)], ['Remaining buffer', summary.buffer],
+  ].map(([label, value], index) => `<div class="affordability-row ${index === 6 ? 'total' : ''}"><span>${escapeHtml(label)}</span><strong class="${value < 0 ? 'negative' : 'positive'}">${money(value)}</strong></div>`).join('');
+  el.affordabilityRatios.innerHTML = [
+    ['Essentials / income', summary.essentialRate], ['Housing / income', summary.housingRate], ['Savings / investing', summary.savingsRate],
+    ['Debt / income', summary.debtToIncome], ['Emergency runway', `${summary.emergencyRunway.toFixed(1)} months`],
+  ].map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${typeof value === 'number' ? formatPercent(value) : escapeHtml(value)}</strong></div>`).join('');
+
+  renderHorizontalChart(el.netWorthChart, snapshots.map((item) => [formatDate(item.date), Number(item.netWorth)]), { preserveOrder: true, limit: 12, emptyText: 'Add financial records to start tracking net worth.' });
+  renderHorizontalChart(el.forecastChart, forecast.map((item) => [formatMonth(item.month), item.surplus]), { preserveOrder: true, limit: 12, emptyText: 'Add income and expenses to build a forecast.' });
+  const wealthMix = {
+    'Liquid cash': summary.liquidCash,
+    'Other cash': Math.max(0, summary.cash - summary.liquidCash),
+    'Property equity': summary.propertyEquity,
+    Investments: summary.investments,
+    Superannuation: summary.superannuation,
+    'Other assets': summary.otherAssets,
+  };
+  renderHorizontalChart(el.portfolioChart, Object.entries(wealthMix), { emptyText: 'Add assets to see your allocation.' });
+
+  el.emergencySummary.innerHTML = `<div class="progress-heading"><div><span>Accessible emergency savings</span><strong>${money(summary.emergencyCash)}</strong></div><b>${summary.emergencyRunway.toFixed(1)} months</b></div><div class="progress-track"><i style="width:${summary.emergencyProgress * 100}%"></i></div><div class="goal-numbers"><span>Target ${money(summary.emergencyTarget)}</span><span>${money(summary.emergencyGap)} remaining</span><span>${formatPercent(summary.emergencyProgress)} complete</span></div>`;
+  el.emergencyTargetMonths.value = summary.emergencyTargetMonths;
+
+  const upcoming = [
+    ...(state.insurancePolicies || []).filter((item) => item.renewalDate).map((item) => ({ label: `${item.policyType} renewal`, date: item.renewalDate })),
+    ...(state.liabilities || []).filter((item) => item.type === 'Credit Card' && item.paymentDueDate).map((item) => ({ label: `${item.name} payment`, date: item.paymentDueDate })),
+  ].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  el.financialSignals.innerHTML = `
+    <div><span>Debt-to-income</span><strong>${formatPercent(summary.debtToIncome)}</strong></div>
+    <div><span>Superannuation</span><strong>${money(summary.superannuation)}</strong></div>
+    <div><span>Investments</span><strong>${money(summary.investments)}</strong></div>
+    <div><span>Property equity</span><strong>${money(summary.propertyEquity)}</strong></div>
+    ${upcoming.map((item) => `<div><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(formatDate(item.date))}</strong></div>`).join('')}
+    ${!upcoming.length ? '<p class="empty-history">No upcoming insurance renewals or card payments recorded.</p>' : ''}
+  `;
+
+  el.forecastRows.innerHTML = forecast.map((item) => `<tr><td>${escapeHtml(formatMonth(item.month))}</td><td>${money(item.income)}</td><td>${money(item.essential)}</td><td>${money(item.lifestyle)}</td><td>${money(item.debtRepayments)}</td><td>${money(item.irregular)}</td><td>${money(item.savings + item.investments)}</td><td class="${item.surplus < 0 ? 'negative' : 'positive'}"><strong>${money(item.surplus)}</strong></td></tr>`).join('');
 }
 
 function latestDebtSnapshots() {
@@ -852,21 +1170,12 @@ function render({ renderTransactionRows = true } = {}) {
     (transaction) => Math.abs(transaction.amount)
   );
   const reviewCount = state.transactions.filter(needsReview).length;
-  const latestMonth = [...new Set(state.transactions.map((transaction) => monthKey(transaction.date)).filter((item) => item !== 'No date'))].sort().at(-1);
-  const topCategory = Object.entries(byCategory)
-    .filter(([, total]) => total < 0)
-    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
-
   el.incomeMetric.textContent = money(income);
   el.spendingMetric.textContent = money(expenses);
   el.netMetric.textContent = money(net);
   el.netMetric.className = net < 0 ? 'negative' : 'positive';
   el.countMetric.textContent = filtered.length;
   el.reviewMetric.textContent = reviewCount;
-  el.heroMonth.textContent = latestMonth ? `Mapping ${latestMonth}` : 'Ready for your next import';
-  el.heroInsight.textContent = topCategory
-    ? `${topCategory[0]} is the biggest spend in this view at ${money(Math.abs(topCategory[1]))}.`
-    : 'Upload a statement to build a clearer map of spending, purposes, and people.';
 
   const months = [...new Set(state.transactions.map((transaction) => monthKey(transaction.date)))];
   renderOptions(el.monthSelect, months, 'All months');
@@ -908,6 +1217,8 @@ function render({ renderTransactionRows = true } = {}) {
   renderGiftCards();
   renderDebts();
   renderImportHistory();
+  renderFinancialRecords();
+  renderDashboard();
 
   if (renderTransactionRows) el.transactionRows.innerHTML = filtered.length ? filtered.map((transaction) => `
     <tr>
@@ -1014,4 +1325,42 @@ el.debtList.addEventListener('click', (event) => {
   if (id) deleteDebt(id);
 });
 
+el.nav.addEventListener('click', (event) => {
+  const target = event.target.dataset.viewTarget;
+  if (!target) return;
+  document.querySelectorAll('[data-view-target]').forEach((button) => button.classList.toggle('active', button.dataset.viewTarget === target));
+  document.querySelectorAll('[data-view]').forEach((view) => {
+    const active = view.dataset.view === target;
+    view.hidden = !active;
+    view.classList.toggle('active', active);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+document.querySelectorAll('[data-add-record]').forEach((form) => {
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    addFinancialRecord(form);
+  });
+});
+
+document.addEventListener('click', (event) => {
+  const id = event.target.dataset.deleteRecord;
+  const collection = event.target.dataset.collection;
+  if (id && collection) deleteFinancialRecord(collection, id);
+});
+
+el.scenarioSelect.addEventListener('change', (event) => {
+  activeScenario = event.target.value;
+  renderDashboard();
+});
+
+el.emergencyTargetMonths.addEventListener('change', (event) => {
+  const emergencyTargetMonths = Math.max(1, Number(event.target.value) || 6);
+  commit({ ...state, settings: { ...state.settings, emergencyTargetMonths } });
+});
+
+el.snapshotBtn.addEventListener('click', saveSnapshot);
+
+initialiseFormOptions();
 render();

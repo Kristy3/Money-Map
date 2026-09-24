@@ -4,236 +4,72 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Money Map</title>
-    <link rel="stylesheet" href="src/styles.css?v=20260924-faster-review-filter" />
+    <link rel="stylesheet" href="src/styles.css?v=20260924-financial-dashboard" />
   </head>
   <body>
     <main>
       <header class="topbar">
-        <div class="brand">
-          <span class="brand-mark">MM</span>
-          <div>
-            <p class="eyebrow">Private local budget</p>
-            <h1>Money Map</h1>
-          </div>
-        </div>
-        <div class="actions">
-          <button type="button" id="backupBtn" title="Download backup">Backup</button>
-          <label class="button" title="Restore backup">
-            Restore
-            <input id="backupInput" type="file" accept="application/json" />
-          </label>
-        </div>
+        <div class="brand"><span class="brand-mark">MM</span><div><p class="eyebrow">Private financial dashboard</p><h1>Money Map</h1></div></div>
+        <div class="actions"><button type="button" id="backupBtn" title="Download a private local backup">Backup</button><label class="button" title="Restore a Money Map backup">Restore<input id="backupInput" type="file" accept="application/json" /></label></div>
       </header>
-
-      <section class="hero">
-        <div>
-          <p class="eyebrow">This month</p>
-          <h2 id="heroMonth">Ready for your next import</h2>
-          <p id="heroInsight">Upload a statement to build a clearer map of spending, purposes, and people.</p>
-        </div>
-        <div class="hero-stat">
-          <span>Needs review</span>
-          <strong id="reviewMetric">0</strong>
-        </div>
-      </section>
-
-      <section class="import-band" id="dropZone">
-        <div>
-          <h2>Import monthly statements</h2>
-          <p>Choose bank or credit-card CSV files. They are read in your browser and stored locally.</p>
-        </div>
-        <label class="upload-target">
-          <span class="upload-icon">CSV</span>
-          <span>Upload CSV files</span>
-          <input id="csvInput" type="file" accept=".csv,text/csv" multiple />
-        </label>
-      </section>
-
+      <nav class="app-nav" aria-label="Money Map sections">
+        <button type="button" class="active" data-view-target="overview">Overview</button><button type="button" data-view-target="cashflow">Cash Flow</button><button type="button" data-view-target="wealth">Wealth</button><button type="button" data-view-target="plans">Plans</button><button type="button" data-view-target="transactions">Transactions</button>
+      </nav>
       <div id="notice" class="notice hidden"></div>
 
-      <section class="panel import-history-panel">
-        <div class="panel-title">
-          <div>
-            <h2>Imported CSVs</h2>
-            <p>Recent statement files loaded into Money Map.</p>
-          </div>
-        </div>
-        <div id="importHistory" class="import-history"></div>
-      </section>
-
-      <section class="metrics">
-        <div>
-          <span>Income</span>
-          <strong id="incomeMetric">$0.00</strong>
-        </div>
-        <div>
-          <span>Spending</span>
-          <strong id="spendingMetric">$0.00</strong>
-        </div>
-        <div>
-          <span>Net</span>
-          <strong id="netMetric">$0.00</strong>
-        </div>
-        <div>
-          <span>Transactions</span>
-          <strong id="countMetric">0</strong>
-        </div>
-      </section>
-
-      <section class="chart-grid">
-        <article class="panel chart-panel">
-          <div class="panel-title">
-            <div>
-              <h2>Monthly Spending</h2>
-              <p>Work reimbursements are excluded.</p>
-            </div>
-          </div>
-          <div id="monthlyChart" class="chart empty-chart">Import transactions to see monthly spending.</div>
-        </article>
-        <article class="panel chart-panel">
-          <div class="panel-title">
-            <div>
-              <h2>Category Split</h2>
-              <p>Largest spending categories in this view.</p>
-            </div>
-          </div>
-          <div id="categoryChart" class="chart empty-chart">No spending categories yet.</div>
-        </article>
-        <article class="panel chart-panel">
-          <div class="panel-title">
-            <div>
-              <h2>Purpose Split</h2>
-              <p>Useful for holidays, gift cards, and family tracking.</p>
-            </div>
-          </div>
-          <div id="purposeChart" class="chart empty-chart">No purpose data yet.</div>
-        </article>
-      </section>
-
-      <section class="panel gift-card-panel">
-        <div class="panel-title">
-          <div>
-            <h2>Gift Card Tracker</h2>
-            <p>Record gift cards when you buy them, then match them to statement transactions later.</p>
-          </div>
-        </div>
-        <div class="gift-card-layout">
-          <div class="gift-card-form">
-            <input id="giftCardDate" type="date" />
-            <input id="giftCardProvider" placeholder="Provider, e.g. Woolworths, Coles, Qantas Marketplace" />
-            <input id="giftCardAmount" type="number" step="0.01" placeholder="Amount" />
-            <input id="giftCardType" placeholder="Card type, e.g. Amazon, Priceline, Restaurant" />
-            <input id="giftCardPurpose" placeholder="Purpose" list="purposes" />
-            <input id="giftCardPerson" placeholder="Person optional" list="people" />
-            <input id="giftCardNotes" placeholder="Notes optional" />
-            <button type="button" id="addGiftCardBtn">Add gift card</button>
-          </div>
-          <div>
-            <div id="giftCardSummary" class="gift-card-summary"></div>
-            <div id="giftCardMatches" class="gift-card-matches"></div>
-          </div>
-        </div>
-        <div id="giftCardList" class="gift-card-list"></div>
-      </section>
-
-      <section class="panel debt-panel">
-        <div class="panel-title">
-          <div>
-            <h2>Debt Tracker</h2>
-            <p>Log balances over time for credit cards, loans, repayments, or money owed.</p>
-          </div>
-        </div>
-        <div class="debt-layout">
-          <div class="debt-form">
-            <input id="debtName" placeholder="Debt name, e.g. Amex or Car loan" />
-            <input id="debtDate" type="date" />
-            <input id="debtBalance" type="number" step="0.01" placeholder="Current balance" />
-            <button type="button" id="addDebtBtn">Add balance</button>
-          </div>
-          <div>
-            <div id="debtSummary" class="debt-summary"></div>
-            <div id="debtChart" class="chart debt-chart empty-chart">Add a debt balance to start tracking progress.</div>
-          </div>
-        </div>
-        <div id="debtList" class="debt-list"></div>
-      </section>
-
-      <section class="layout">
-        <aside class="panel rules">
-          <div class="panel-title">
-            <div>
-              <h2>Rules</h2>
-              <p>Teach Money Map how to tag repeat transactions.</p>
-            </div>
-            <button type="button" id="recategoriseBtn" title="Re-apply rules">Refresh</button>
-          </div>
-          <div class="rule-form">
-            <input id="ruleMatch" placeholder="keywords, comma separated" />
-            <input id="ruleCategory" placeholder="category" list="categories" />
-            <input id="rulePurpose" placeholder="purpose" list="purposes" />
-            <input id="rulePerson" placeholder="person" list="people" />
-            <button type="button" id="addRuleBtn">Add rule</button>
-          </div>
-          <div id="ruleList" class="rule-list"></div>
-        </aside>
-
-        <section class="panel">
-          <div class="filters">
-            <label>
-              <span>Search</span>
-              <input id="queryInput" placeholder="Search transactions" />
-            </label>
-            <label>
-              <span>Month</span>
-              <select id="monthSelect"></select>
-            </label>
-            <label>
-              <span>Category</span>
-              <select id="categorySelect"></select>
-            </label>
-            <label>
-              <span>Purpose</span>
-              <select id="purposeSelect"></select>
-            </label>
-            <label>
-              <span>Review status</span>
-              <select id="reviewSelect">
-                <option value="all">All transactions</option>
-                <option value="needs-review">Needs category or purpose</option>
-                <option value="complete">Fully assigned</option>
-              </select>
-            </label>
-          </div>
-
-          <div id="categoryBars" class="category-bars"></div>
-
-          <datalist id="categories"></datalist>
-          <datalist id="purposes"></datalist>
-          <datalist id="people"></datalist>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>Category</th>
-                  <th>Purpose</th>
-                  <th>Person</th>
-                  <th>Account</th>
-                </tr>
-              </thead>
-              <tbody id="transactionRows">
-                <tr>
-                  <td colspan="7" class="empty">Upload a CSV statement to start building your budget.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <section class="app-view active" data-view="overview">
+        <section class="hero financial-hero">
+          <div><p class="eyebrow">Financial position</p><h2 id="netWorthHero">Build your complete Money Map</h2><p id="heroInsight">Add accounts, income and regular costs to see whether your money comfortably supports your life.</p></div>
+          <label class="scenario-picker"><span>Scenario</span><select id="scenarioSelect"><option value="current">Current position</option><option value="solo">Future / Solo</option></select></label>
         </section>
+        <section class="metrics financial-metrics">
+          <div><span>Net worth</span><strong id="netWorthMetric">$0.00</strong><small id="netWorthChange">No previous snapshot</small></div><div><span>Total assets</span><strong id="assetsMetric">$0.00</strong><small>Including property and super</small></div><div><span>Total liabilities</span><strong id="liabilitiesMetric">$0.00</strong><small>Actual balances, not credit limits</small></div><div><span>Liquid cash</span><strong id="liquidCashMetric">$0.00</strong><small>Accessible accounts only</small></div><div><span>Monthly income</span><strong id="monthlyIncomeMetric">$0.00</strong><small id="incomeSourceNote">From latest transactions</small></div><div><span>Monthly expenses</span><strong id="monthlyExpenseMetric">$0.00</strong><small>Including true-cost provisions</small></div><div><span>Monthly buffer</span><strong id="monthlyBufferMetric">$0.00</strong><small>Surplus or deficit</small></div><div><span>Savings rate</span><strong id="savingsRateMetric">0%</strong><small>Planned savings and investing</small></div>
+        </section>
+        <section class="panel affordability-panel"><div class="panel-title"><div><p class="eyebrow">Can I afford my life?</p><h2 id="affordabilityHeadline">Add your plan to find out</h2><p>Regular income compared with essentials, debt, lifestyle and future provisions.</p></div><span id="affordabilityStatus" class="status-badge neutral">Needs setup</span></div><div id="affordabilityBreakdown" class="affordability-grid"></div><div id="affordabilityRatios" class="ratio-grid"></div></section>
+        <section class="chart-grid">
+          <article class="panel chart-panel"><div class="panel-title"><div><h2>Net Worth Trend</h2><p>Historical snapshots of your total position.</p></div><button type="button" id="snapshotBtn">Save snapshot</button></div><div id="netWorthChart" class="chart empty-chart">Add financial records to start tracking net worth.</div></article>
+          <article class="panel chart-panel"><div class="panel-title"><div><h2>12-Month Cash Flow</h2><p>Projected monthly surplus or deficit.</p></div></div><div id="forecastChart" class="chart empty-chart">Add income and expenses to build a forecast.</div></article>
+          <article class="panel chart-panel"><div class="panel-title"><div><h2>Wealth Mix</h2><p>Accessible and long-term wealth kept distinct.</p></div></div><div id="portfolioChart" class="chart empty-chart">Add assets to see your allocation.</div></article>
+        </section>
+        <section class="split-grid"><article class="panel"><div class="panel-title"><div><h2>Emergency Fund</h2><p>Only accessible accounts marked for emergencies are included.</p></div></div><div id="emergencySummary" class="progress-summary"></div><label class="compact-setting"><span>Target months</span><input id="emergencyTargetMonths" type="number" min="1" max="24" step="1" /></label></article><article class="panel"><div class="panel-title"><div><h2>Financial Signals</h2><p>Ratios and upcoming dates worth attention.</p></div></div><div id="financialSignals" class="signal-list"></div></article></section>
+      </section>
+
+      <section class="app-view" data-view="cashflow" hidden>
+        <div class="view-heading"><div><p class="eyebrow">Income and spending plan</p><h2>Cash Flow</h2><p>Convert weekly, fortnightly, monthly and annual amounts into a comparable monthly plan.</p></div></div>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Income Sources</h2><p>Salary, rental, distributions, interest and variable income.</p></div></div><details class="entry-drawer"><summary>Add income source</summary><form class="record-form" data-add-record="incomeSources"><input name="name" placeholder="Income name" required /><select name="category"><option>Salary / Wages</option><option>Bonus</option><option>Rental Income</option><option>Short-term Accommodation</option><option>Dividends / Distributions</option><option>Interest</option><option>Child Support</option><option>Business / Side Income</option><option>Other</option></select><input name="amount" type="number" step="0.01" placeholder="Amount" required /><select name="frequency" data-frequency></select><select name="incomeBasis"><option value="net">Net</option><option value="gross">Gross</option></select><select name="reliability"><option value="regular">Regular / guaranteed</option><option value="variable">Variable</option></select><input name="startDate" type="date" title="Start date" /><input name="endDate" type="date" title="End date optional" /><input name="notes" placeholder="Notes optional" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" title="Future / Solo allocation percentage" /><button type="submit">Add income</button></form></details><div id="incomeList" class="record-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Regular Expenses</h2><p>Separate essentials, lifestyle, savings and investments.</p></div></div><details class="entry-drawer"><summary>Add regular expense</summary><form class="record-form" data-add-record="recurringExpenses"><input name="name" placeholder="Expense name" required /><input name="category" placeholder="Category" list="categories" required /><input name="amount" type="number" step="0.01" placeholder="Amount" required /><select name="frequency" data-frequency></select><select name="expenseType"><option value="essential">Essential</option><option value="lifestyle">Lifestyle / discretionary</option><option value="savings">Savings contribution</option><option value="investment">Investment contribution</option></select><label class="check-field"><input name="isHousing" type="checkbox" />Housing cost</label><input name="notes" placeholder="Notes optional" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add expense</button></form></details><div id="expenseList" class="record-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Annual and Irregular Expenses</h2><p>Provision monthly or place the full cost in its due month, never both.</p></div></div><details class="entry-drawer"><summary>Add irregular expense</summary><form class="record-form" data-add-record="irregularExpenses"><input name="name" placeholder="Expense name" required /><input name="category" placeholder="Category" list="categories" required /><input name="amount" type="number" step="0.01" placeholder="Amount" required /><select name="frequency" data-frequency data-default="annual"></select><input name="nextDueDate" type="date" title="Next due date" /><select name="fundingMode"><option value="provision">Monthly provision</option><option value="due-date">Full cost in due month</option></select><input name="monthlyProvision" type="number" step="0.01" placeholder="Custom monthly provision optional" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add irregular expense</button></form></details><div id="irregularExpenseList" class="record-list"></div></section>
+        <section class="panel"><div class="panel-title"><div><h2>Forecast Detail</h2><p>Red months spend more than they earn.</p></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Income</th><th>Essential</th><th>Lifestyle</th><th>Debt</th><th>Irregular</th><th>Savings</th><th>Surplus</th></tr></thead><tbody id="forecastRows"></tbody></table></div></section>
+      </section>
+
+      <section class="app-view" data-view="wealth" hidden>
+        <div class="view-heading"><div><p class="eyebrow">Assets and liabilities</p><h2>Wealth</h2><p>Keep accessible cash, property, investments and superannuation clearly separated.</p></div></div>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Cash and Bank Accounts</h2><p>Transaction, savings, offset and cash-equivalent accounts.</p></div></div><details class="entry-drawer"><summary>Add account</summary><form class="record-form" data-add-record="accounts"><input name="institution" placeholder="Institution" /><input name="name" placeholder="Account name" required /><select name="accountType"><option>Transaction</option><option>Savings</option><option>Offset</option><option>High-interest Savings</option><option>Cash</option><option>Other</option></select><input name="balance" type="number" step="0.01" placeholder="Current balance" required /><input name="interestRate" type="number" step="0.01" placeholder="Interest rate %" /><input name="purpose" placeholder="Account purpose" /><label class="check-field"><input name="isLiquid" type="checkbox" checked />Liquid cash</label><label class="check-field"><input name="isEmergencyFund" type="checkbox" />Emergency fund</label><label class="check-field"><input name="isOffset" type="checkbox" />Offset account</label><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add account</button></form></details><div id="accountList" class="record-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Properties</h2><p>Ownership-adjusted value, debt, offsets and rental details.</p></div></div><details class="entry-drawer"><summary>Add property</summary><form class="record-form" data-add-record="properties"><input name="name" placeholder="Property name or description" required /><select name="propertyType"><option>Home</option><option>Investment</option><option>Other</option></select><input name="marketValue" type="number" step="0.01" placeholder="Estimated market value" required /><input name="ownershipPercent" type="number" min="0" max="100" value="100" placeholder="Ownership %" /><input name="mortgageBalance" type="number" step="0.01" placeholder="Mortgage balance" /><input name="offsetBalance" type="number" step="0.01" placeholder="Offset balance if not linked" /><select name="offsetAccountId" id="propertyOffsetAccountId"><option value="">No linked offset account</option></select><input name="interestRate" type="number" step="0.01" placeholder="Interest rate %" /><input name="requiredRepayment" type="number" step="0.01" placeholder="Required repayment" /><select name="repaymentFrequency" data-frequency></select><input name="remainingTermYears" type="number" step="0.1" placeholder="Remaining term years" /><input name="rentalIncome" type="number" step="0.01" placeholder="Monthly rental income" /><input name="propertyExpenses" type="number" step="0.01" placeholder="Monthly property expenses" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add property</button></form></details><div id="propertyList" class="record-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Investments and Other Assets</h2><p>Track meaningful holdings without counting the same asset twice.</p></div></div><details class="entry-drawer"><summary>Add asset or investment</summary><form class="record-form" data-add-record="assets"><input name="name" placeholder="Holding or asset name" required /><input name="ticker" placeholder="Ticker / code optional" /><select name="assetClass"><option>Australian Shares</option><option>International Shares</option><option>Property</option><option>Managed Funds</option><option>Cryptocurrency</option><option>Business</option><option>Vehicle</option><option>Other</option></select><input name="units" type="number" step="0.0001" placeholder="Units / shares" /><input name="costBase" type="number" step="0.01" placeholder="Cost base" /><input name="currentValue" type="number" step="0.01" placeholder="Current value" required /><input name="dividendIncome" type="number" step="0.01" placeholder="Annual distributions" /><input name="yield" type="number" step="0.01" placeholder="Yield % optional" /><label class="check-field"><input name="excludeFromNetWorth" type="checkbox" />Exclude from net worth</label><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add asset</button></form></details><div id="assetList" class="record-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Superannuation</h2><p>Included in net worth, never in liquid cash or emergency funds.</p></div></div><details class="entry-drawer"><summary>Add super fund</summary><form class="record-form" data-add-record="superAccounts"><input name="fund" placeholder="Fund" required /><input name="balance" type="number" step="0.01" placeholder="Current balance" required /><input name="investmentOption" placeholder="Investment option" /><input name="employerContribution" type="number" step="0.01" placeholder="Employer contribution / month" /><input name="personalContribution" type="number" step="0.01" placeholder="Personal contribution / month" /><input name="concessionalContribution" type="number" step="0.01" placeholder="Concessional / year" /><input name="fees" type="number" step="0.01" placeholder="Annual fees" /><input name="insurance" placeholder="Insurance held through super" /><input name="beneficiaryStatus" placeholder="Beneficiary status" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add super</button></form></details><div id="superList" class="record-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Debts and Credit Cards</h2><p>Only outstanding balances count as liabilities; credit limits do not.</p></div></div><details class="entry-drawer"><summary>Add debt or credit card</summary><form class="record-form" data-add-record="liabilities"><input name="name" placeholder="Debt or card name" required /><select name="type"><option>Home Loan</option><option>Investment Loan</option><option>Car Loan</option><option>Personal Loan</option><option>Green / Solar Loan</option><option>HECS / HELP</option><option>Credit Card</option><option>BNPL</option><option>Other</option></select><input name="currentBalance" type="number" step="0.01" placeholder="Current balance" required /><input name="originalBalance" type="number" step="0.01" placeholder="Original balance" /><input name="interestRate" type="number" step="0.01" placeholder="Interest rate %" /><input name="requiredRepayment" type="number" step="0.01" placeholder="Required repayment" /><select name="repaymentFrequency" data-frequency></select><input name="remainingTermYears" type="number" step="0.1" placeholder="Remaining term years" /><label class="check-field"><input name="isDeductible" type="checkbox" />Deductible debt</label><input name="linkedAsset" placeholder="Linked asset optional" /><input name="creditLimit" type="number" step="0.01" placeholder="Credit limit (not debt)" /><input name="statementBalance" type="number" step="0.01" placeholder="Statement balance" /><input name="paymentDueDate" type="date" title="Payment due date" /><input name="annualFee" type="number" step="0.01" placeholder="Annual fee" /><input name="rewardsProgram" placeholder="Rewards program" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add liability</button></form></details><div id="liabilityList" class="record-list"></div></section>
+        <section class="panel debt-panel"><div class="panel-title"><div><h2>Debt Balance History</h2><p>Keep the existing snapshot tracker for changes over time.</p></div></div><div class="debt-layout"><div class="debt-form"><input id="debtName" placeholder="Debt name" /><input id="debtDate" type="date" /><input id="debtBalance" type="number" step="0.01" placeholder="Current balance" /><button type="button" id="addDebtBtn">Add balance</button></div><div><div id="debtSummary" class="debt-summary"></div><div id="debtChart" class="chart debt-chart empty-chart">Add a debt balance to start tracking progress.</div></div></div><div id="debtList" class="debt-list"></div></section>
+      </section>
+
+      <section class="app-view" data-view="plans" hidden>
+        <div class="view-heading"><div><p class="eyebrow">Protection and progress</p><h2>Plans</h2><p>Goals, sinking funds and insurance in one place.</p></div></div>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Savings Goals and Sinking Funds</h2><p>Allocate balances deliberately so the same account is not counted twice.</p></div></div><details class="entry-drawer"><summary>Add savings goal</summary><form class="record-form" data-add-record="savingsGoals"><input name="name" placeholder="Goal name" required /><select name="goalType"><option>Emergency Fund</option><option>Travel</option><option>Christmas</option><option>Vehicle Replacement</option><option>Vehicle Maintenance</option><option>Home Repairs</option><option>Children / School</option><option>Technology</option><option>Major Purchase</option><option>Custom</option></select><input name="targetAmount" type="number" step="0.01" placeholder="Target amount" required /><input name="currentAmount" type="number" step="0.01" placeholder="Current allocated amount" /><input name="targetDate" type="date" /><select name="linkedAccountId" id="goalAccountId"><option value="">No linked account</option></select><input name="notes" placeholder="Notes optional" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add savings goal</button></form></details><div id="savingsGoalList" class="goal-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Financial Goals</h2><p>Track broader outcomes independently from ordinary sinking funds.</p></div></div><details class="entry-drawer"><summary>Add financial goal</summary><form class="record-form" data-add-record="financialGoals"><input name="name" placeholder="Goal" required /><select name="goalType"><option>Mortgage Reduction</option><option>Emergency Savings</option><option>Investing</option><option>Retirement</option><option>Major Purchase</option><option>Travel</option><option>Debt Elimination</option><option>Custom</option></select><input name="targetAmount" type="number" step="0.01" placeholder="Target amount" required /><input name="currentAmount" type="number" step="0.01" placeholder="Current progress" /><input name="targetDate" type="date" /><select name="status"><option>On track</option><option>Needs attention</option><option>Paused</option><option>Complete</option></select><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add financial goal</button></form></details><div id="financialGoalList" class="goal-list"></div></section>
+        <section class="panel record-panel"><div class="panel-title"><div><h2>Insurance Register</h2><p>Keep renewal dates and protection details visible.</p></div></div><details class="entry-drawer"><summary>Add insurance policy</summary><form class="record-form" data-add-record="insurancePolicies"><input name="provider" placeholder="Provider" required /><select name="policyType"><option>Home</option><option>Contents</option><option>Vehicle</option><option>Private Health</option><option>Life</option><option>TPD</option><option>Income Protection</option><option>Landlord</option><option>Through Super</option><option>Other</option></select><input name="coverageAmount" type="number" step="0.01" placeholder="Coverage amount" /><input name="premium" type="number" step="0.01" placeholder="Premium" /><select name="premiumFrequency" data-frequency></select><input name="renewalDate" type="date" /><input name="reference" placeholder="Policy / reference" /><input name="notes" placeholder="Notes optional" /><select name="scenarioScope" data-scenario-scope></select><input name="soloPercent" type="number" min="0" max="100" value="100" placeholder="Solo %" /><button type="submit">Add policy</button></form></details><div id="insuranceList" class="record-list"></div></section>
+      </section>
+
+      <section class="app-view" data-view="transactions" hidden>
+        <div class="view-heading"><div><p class="eyebrow">Statements and categorisation</p><h2>Transactions</h2><p>Your existing import workflow, rules and gift-card matching.</p></div><div class="hero-stat"><span>Needs review</span><strong id="reviewMetric">0</strong></div></div>
+        <section class="import-band" id="dropZone"><div><h2>Import monthly statements</h2><p>CSV files are read in your browser and stored locally.</p></div><label class="upload-target"><span class="upload-icon">CSV</span><span>Upload CSV files</span><input id="csvInput" type="file" accept=".csv,text/csv" multiple /></label></section>
+        <section class="panel import-history-panel"><div class="panel-title"><div><h2>Imported CSVs</h2><p>Recent statement files loaded into Money Map.</p></div></div><div id="importHistory" class="import-history"></div></section>
+        <section class="metrics"><div><span>Income</span><strong id="incomeMetric">$0.00</strong></div><div><span>Spending</span><strong id="spendingMetric">$0.00</strong></div><div><span>Net</span><strong id="netMetric">$0.00</strong></div><div><span>Transactions</span><strong id="countMetric">0</strong></div></section>
+        <section class="chart-grid"><article class="panel chart-panel"><div class="panel-title"><div><h2>Monthly Spending</h2><p>Work and transfers are excluded.</p></div></div><div id="monthlyChart" class="chart empty-chart"></div></article><article class="panel chart-panel"><div class="panel-title"><div><h2>Category Split</h2><p>Largest spending categories in this view.</p></div></div><div id="categoryChart" class="chart empty-chart"></div></article><article class="panel chart-panel"><div class="panel-title"><div><h2>Purpose Split</h2><p>Holidays, family and spending intent.</p></div></div><div id="purposeChart" class="chart empty-chart"></div></article></section>
+        <section class="panel gift-card-panel"><div class="panel-title"><div><h2>Gift Card Tracker</h2><p>Record purchases now and match them to statement transactions later.</p></div></div><div class="gift-card-layout"><div class="gift-card-form"><input id="giftCardDate" type="date" /><input id="giftCardProvider" placeholder="Provider" /><input id="giftCardAmount" type="number" step="0.01" placeholder="Amount" /><input id="giftCardType" placeholder="Card type" /><input id="giftCardPurpose" placeholder="Purpose" list="purposes" /><input id="giftCardPerson" placeholder="Person optional" list="people" /><input id="giftCardNotes" placeholder="Notes optional" /><button type="button" id="addGiftCardBtn">Add gift card</button></div><div><div id="giftCardSummary" class="gift-card-summary"></div><div id="giftCardMatches" class="gift-card-matches"></div></div></div><div id="giftCardList" class="gift-card-list"></div></section>
+        <section class="layout"><aside class="panel rules"><div class="panel-title"><div><h2>Rules</h2><p>Teach Money Map how to tag repeat transactions.</p></div><button type="button" id="recategoriseBtn">Refresh</button></div><div class="rule-form"><input id="ruleMatch" placeholder="keywords, comma separated" /><input id="ruleCategory" placeholder="category" list="categories" /><input id="rulePurpose" placeholder="purpose" list="purposes" /><input id="rulePerson" placeholder="person" list="people" /><button type="button" id="addRuleBtn">Add rule</button></div><div id="ruleList" class="rule-list"></div></aside><section class="panel"><div class="filters"><label><span>Search</span><input id="queryInput" placeholder="Search transactions" /></label><label><span>Month</span><select id="monthSelect"></select></label><label><span>Category</span><select id="categorySelect"></select></label><label><span>Purpose</span><select id="purposeSelect"></select></label><label><span>Review status</span><select id="reviewSelect"><option value="all">All transactions</option><option value="needs-review">Needs category or purpose</option><option value="complete">Fully assigned</option></select></label></div><div id="categoryBars" class="category-bars"></div><datalist id="categories"></datalist><datalist id="purposes"></datalist><datalist id="people"></datalist><div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th><th>Purpose</th><th>Person</th><th>Account</th></tr></thead><tbody id="transactionRows"><tr><td colspan="7" class="empty">Upload a CSV statement to start building your budget.</td></tr></tbody></table></div></section></section>
       </section>
     </main>
-    <script src="src/app.js?v=20260924-faster-review-filter"></script>
+    <script src="src/finance.js?v=20260924-financial-dashboard"></script>
+    <script src="src/app.js?v=20260924-financial-dashboard"></script>
   </body>
 </html>
