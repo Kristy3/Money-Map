@@ -23,6 +23,11 @@
   const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, number(value)));
   const sum = (items, getter = (item) => item) => items.reduce((total, item) => total + number(getter(item)), 0);
 
+  function normalizeTransactionAmount(amount, accountType = 'transaction') {
+    const parsedAmount = number(amount);
+    return accountType === 'credit-card' ? -parsedAmount : parsedAmount;
+  }
+
   function monthlyEquivalent(amount, frequency = 'monthly') {
     return number(amount) * (FREQUENCY_MONTHS[String(frequency).toLowerCase()] ?? 1);
   }
@@ -290,6 +295,7 @@
     FREQUENCY_MONTHS,
     monthlyEquivalent,
     annualEquivalent,
+    normalizeTransactionAmount,
     scenarioAllocation,
     latestMonth,
     transactionMonthlyActuals,

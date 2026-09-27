@@ -13,6 +13,13 @@ test('converts common Australian payment frequencies', () => {
   assert.equal(finance.monthlyEquivalent(1000, 'fortnightly'), 26000 / 12);
 });
 
+test('normalizes transaction and credit-card statement signs', () => {
+  assert.equal(finance.normalizeTransactionAmount(45, 'transaction'), 45);
+  assert.equal(finance.normalizeTransactionAmount(-45, 'transaction'), -45);
+  assert.equal(finance.normalizeTransactionAmount(45, 'credit-card'), -45);
+  assert.equal(finance.normalizeTransactionAmount(-45, 'credit-card'), 45);
+});
+
 test('offset cash is not double counted when linked to an account', () => {
   const state = blank();
   state.accounts.push({ id: 'offset', balance: 50000, isLiquid: true, scenarioScope: 'both' });

@@ -20,8 +20,9 @@ const defaultRules = [
 ];
 
 const initialState = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   transactions: [],
+  transactionAccountTypes: {},
   importHistory: [],
   debts: [],
   giftCards: [],
@@ -61,6 +62,7 @@ const el = {
   heroMonth: document.querySelector('#heroMonth'),
   heroInsight: document.querySelector('#heroInsight'),
   importHistory: document.querySelector('#importHistory'),
+  importedAccounts: document.querySelector('#importedAccounts'),
   monthlyChart: document.querySelector('#monthlyChart'),
   categoryChart: document.querySelector('#categoryChart'),
   purposeChart: document.querySelector('#purposeChart'),
@@ -163,6 +165,17 @@ function migrateState(savedState) {
   next.transactions = (next.transactions || []).map((transaction) => ({
     purpose: '',
     ...transaction,
+    rawAmount: Number(transaction.rawAmount ?? transaction.amount) || 0,
+  }));
+  next.transactionAccountTypes = next.transactionAccountTypes && typeof next.transactionAccountTypes === 'object'
+    ? next.transactionAccountTypes
+    : {};
+  next.transactions = next.transactions.map((transaction) => ({
+    ...transaction,
+    amount: MoneyMapFinance.normalizeTransactionAmount(
+      transaction.rawAmount,
+      next.transactionAccountTypes[transaction.account]
+    ),
   }));
   next.importHistory = Array.isArray(next.importHistory) && next.importHistory.length
     ? next.importHistory
@@ -213,7 +226,7 @@ function migrateState(savedState) {
     next[collection] = next[collection].map((record) => ({ scenarioScope: 'both', soloPercent: 100, ...record }));
   });
   next.settings = { ...cloneInitialState().settings, ...(next.settings || {}) };
-  next.schemaVersion = 2;
+  next.schemaVersion = 3;
   const savedRules = (next.rules || []).map((rule) => ({
     purpose: '',
     ...rule,
@@ -370,13 +383,16 @@ function mapCsvRows(rows, fileName) {
     .filter((row) => Object.values(row).some((value) => String(value || '').trim()))
     .map((row) => {
       const description = String(row[descColumn] || row.Description || row.Details || 'Unknown transaction').trim();
-      const amount = amountColumn ? parseMoney(row[amountColumn]) : parseMoney(row[creditColumn]) - parseMoney(row[debitColumn]);
+      const rawAmount = amountColumn ? parseMoney(row[amountColumn]) : parseMoney(row[creditColumn]) - parseMoney(row[debitColumn]);
+      const account = String(row[accountColumn] || fileName.replace(/\.csv$/i, '') || 'Imported').trim();
+      const amount = MoneyMapFinance.normalizeTransactionAmount(rawAmount, state.transactionAccountTypes[account]);
       const transaction = {
         id: makeId(),
         date: parseDate(row[dateColumn]),
         description,
         amount,
-        account: String(row[accountColumn] || fileName.replace(/\.csv$/i, '') || 'Imported').trim(),
+        rawAmount,
+        account,
         sourceFile: fileName,
         importedAt: new Date().toISOString(),
         notes: '',
@@ -1153,6 +1169,52 @@ function renderImportHistory() {
   `).join('') : '<p class="empty-history">No CSV imports recorded yet.</p>';
 }
 
+function maskedAccount(account) {
+  const value = String(account || 'Imported');
+  const digits = value.replace(/\D/g, '');
+  if (digits.length >= 4) return `Account ending ${digits.slice(-4)}`;
+  return value;
+}
+
+function renderImportedAccounts() {
+  const accountCounts = state.transactions.reduce((counts, transaction) => {
+    counts[transaction.account] = (counts[transaction.account] || 0) + 1;
+    return counts;
+  }, {});
+  const accounts = Object.keys(accountCounts).sort((a, b) => maskedAccount(a).localeCompare(maskedAccount(b)));
+
+  el.importedAccounts.innerHTML = accounts.length ? accounts.map((account) => `
+    <article class="imported-account-item">
+      <div>
+        <strong>${escapeHtml(maskedAccount(account))}</strong>
+        <span>${accountCounts[account]} transaction${accountCounts[account] === 1 ? '' : 's'}</span>
+      </div>
+      <label>
+        <span>Statement type</span>
+        <select data-imported-account="${escapeHtml(account)}">
+          <option value="transaction" ${state.transactionAccountTypes[account] !== 'credit-card' ? 'selected' : ''}>Transaction account (+ money in, - spending)</option>
+          <option value="credit-card" ${state.transactionAccountTypes[account] === 'credit-card' ? 'selected' : ''}>Credit card (+ purchase, - refund)</option>
+        </select>
+      </label>
+    </article>
+  `).join('') : '<p class="empty-history">Import a CSV to detect its accounts.</p>';
+}
+
+function updateImportedAccountType(account, accountType) {
+  if (!['transaction', 'credit-card'].includes(accountType)) return;
+  const transactionAccountTypes = { ...state.transactionAccountTypes, [account]: accountType };
+  const transactions = state.transactions.map((transaction) => {
+    if (transaction.account !== account) return transaction;
+    const updated = {
+      ...transaction,
+      amount: MoneyMapFinance.normalizeTransactionAmount(transaction.rawAmount, accountType),
+    };
+    return { ...updated, fingerprint: fingerprint(updated) };
+  });
+  commit({ ...state, transactionAccountTypes, transactions });
+  showNotice(`${maskedAccount(account)} is now treated as a ${accountType === 'credit-card' ? 'credit card' : 'transaction account'}. Existing transactions were updated.`);
+}
+
 function render({ renderTransactionRows = true } = {}) {
   const filtered = filteredTransactions();
   const calculated = filtered.filter((transaction) => !isExcludedFromCalculations(transaction));
@@ -1217,6 +1279,7 @@ function render({ renderTransactionRows = true } = {}) {
   renderGiftCards();
   renderDebts();
   renderImportHistory();
+  renderImportedAccounts();
   renderFinancialRecords();
   renderDashboard();
 
@@ -1279,6 +1342,10 @@ el.purposeSelect.addEventListener('change', (event) => {
 el.reviewSelect.addEventListener('change', (event) => {
   filters.review = event.target.value;
   render();
+});
+el.importedAccounts.addEventListener('change', (event) => {
+  const account = event.target.dataset.importedAccount;
+  if (account) updateImportedAccountType(account, event.target.value);
 });
 el.dropZone.addEventListener('dragover', (event) => {
   event.preventDefault();
