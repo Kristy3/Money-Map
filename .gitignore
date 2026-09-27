@@ -17,3 +17,5 @@ data/exports/
 # Optional local app snapshots/backups
 *.local.json
 *.backup.json
+money-map-data.json
+Backups/

@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'local-budget-app:v1';
+const STORAGE_API = '/api/storage';
 const excludedCalculationCategories = ['Transfer', 'Work'];
 
 function makeId() {
@@ -20,7 +21,7 @@ const defaultRules = [
 ];
 
 const initialState = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   transactions: [],
   transactionAccountTypes: {},
   importHistory: [],
@@ -39,6 +40,7 @@ const initialState = {
   insurancePolicies: [],
   netWorthSnapshots: [],
   settings: { emergencyTargetMonths: 6 },
+  storageMeta: { updatedAt: '' },
   rules: defaultRules,
   categories: ['Groceries', 'Gift Cards', 'Gifts', 'Holiday', 'Kids Sports', 'School Fees', 'Transfer', 'Work', 'Insurance', 'Fees', 'Car', 'Tax', 'One-Off', 'Wellness', 'Subscriptions', 'Utilities', 'Health', 'Transport', 'Dining', 'Income', 'Uncategorised'],
   purposes: ['Household', 'General Spending', 'Wellness', 'Eating Out', 'Birthday', 'Charity', 'Donations', 'Lunch Orders', 'Driving Lessons', 'Clothing', 'Fuel', 'Tolls', 'Travel', 'Kids Activities', 'Eddies', 'Internet', 'Ventra', 'Apple Care', 'Sherwood', 'Dee Why', 'Berridale', 'Car', 'Tax Bill', 'School', 'Orthodontics', 'Medical', 'Amex Fees', 'Charging', 'Mobile Phone', 'Electricity', 'Parking', 'Servicing', 'Gym', 'Gaming', 'AI', 'Canada Alaska', 'USA 2026', 'Queensland 2027', 'Europe 2027', 'Sport', 'Entertainment', 'Home', 'Getting Around', 'Income'],
@@ -50,10 +52,28 @@ let filters = { query: '', month: 'all', category: 'all', purpose: 'all', review
 let activeScenario = 'current';
 let selectedTransactionIds = new Set();
 let editingTransactionId = '';
+let oneDriveAvailable = false;
+let oneDriveRevision = '';
+let oneDriveDisplayPath = 'OneDrive\\Money Map\\money-map-data.json';
+let oneDriveSaveTimer;
+let oneDrivePollTimer;
+let oneDriveSaveInProgress = false;
+let localChangesPending = false;
+let pendingRemoteState = null;
 
 const el = {
   backupBtn: document.querySelector('#backupBtn'),
   backupInput: document.querySelector('#backupInput'),
+  storageStatus: document.querySelector('#storageStatus'),
+  storageStatusLabel: document.querySelector('#storageStatusLabel'),
+  storageStatusDetail: document.querySelector('#storageStatusDetail'),
+  syncNowBtn: document.querySelector('#syncNowBtn'),
+  storageConflictDialog: document.querySelector('#storageConflictDialog'),
+  remoteCopyTime: document.querySelector('#remoteCopyTime'),
+  localCopyTime: document.querySelector('#localCopyTime'),
+  useOneDriveCopyBtn: document.querySelector('#useOneDriveCopyBtn'),
+  keepDeviceCopyBtn: document.querySelector('#keepDeviceCopyBtn'),
+  cancelStorageConflictBtn: document.querySelector('#cancelStorageConflictBtn'),
   csvInput: document.querySelector('#csvInput'),
   notice: document.querySelector('#notice'),
   incomeMetric: document.querySelector('#incomeMetric'),
@@ -278,7 +298,8 @@ function migrateState(savedState) {
     next[collection] = next[collection].map((record) => ({ scenarioScope: 'both', soloPercent: 100, ...record }));
   });
   next.settings = { ...cloneInitialState().settings, ...(next.settings || {}) };
-  next.schemaVersion = 4;
+  next.storageMeta = { ...cloneInitialState().storageMeta, ...(next.storageMeta || {}) };
+  next.schemaVersion = 5;
   const savedRules = (next.rules || []).map((rule) => ({
     purpose: '',
     ...rule,
@@ -316,16 +337,187 @@ function importHistoryFromTransactions(transactions) {
 }
 
 function commit(nextState, renderOptions) {
-  state = nextState;
+  state = {
+    ...nextState,
+    schemaVersion: 5,
+    storageMeta: { ...(nextState.storageMeta || {}), updatedAt: new Date().toISOString() },
+  };
   const validTransactionIds = new Set(state.transactions.map((transaction) => transaction.id));
   selectedTransactionIds = new Set([...selectedTransactionIds].filter((id) => validTransactionIds.has(id)));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localChangesPending = true;
+  scheduleOneDriveSave();
   render(renderOptions);
 }
 
 function showNotice(message) {
   el.notice.textContent = message;
   el.notice.classList.remove('hidden');
+}
+
+function setStorageStatus(status, label, detail) {
+  el.storageStatus.className = `storage-status ${status}`;
+  el.storageStatusLabel.textContent = label;
+  el.storageStatusDetail.textContent = detail;
+  el.syncNowBtn.textContent = status === 'conflict' ? 'Resolve' : 'Sync';
+}
+
+function formatStorageTime(value) {
+  if (!value) return 'Time unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Time unavailable';
+  return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+}
+
+function stateHasUserData(candidate) {
+  const collections = [
+    'transactions', 'giftCards', 'debts', 'accounts', 'properties', 'assets', 'superAccounts', 'liabilities',
+    'incomeSources', 'recurringExpenses', 'irregularExpenses', 'savingsGoals', 'financialGoals',
+    'insurancePolicies', 'netWorthSnapshots', 'importHistory',
+  ];
+  return collections.some((collection) => (candidate[collection] || []).length > 0);
+}
+
+async function storageRequest(options) {
+  const response = await fetch(STORAGE_API, {
+    cache: 'no-store',
+    headers: options?.body ? { 'Content-Type': 'application/json' } : undefined,
+    ...options,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(body.error || `Storage request failed (${response.status}).`);
+    error.status = response.status;
+    error.body = body;
+    throw error;
+  }
+  return body;
+}
+
+function useOneDriveState(remoteState, revision, displayPath) {
+  state = migrateState(remoteState);
+  selectedTransactionIds.clear();
+  oneDriveRevision = revision;
+  if (displayPath) oneDriveDisplayPath = displayPath;
+  localChangesPending = false;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+  setStorageStatus('saved', 'Saved to OneDrive', oneDriveDisplayPath);
+}
+
+function scheduleOneDriveSave() {
+  clearTimeout(oneDriveSaveTimer);
+  if (!oneDriveAvailable) {
+    setStorageStatus('local', 'Saved in this browser', 'Start Money Map with the OneDrive launcher to sync');
+    return;
+  }
+  setStorageStatus('syncing', 'Saving to OneDrive', oneDriveDisplayPath);
+  oneDriveSaveTimer = setTimeout(() => saveStateToOneDrive(), 450);
+}
+
+async function loadPendingRemoteState() {
+  const remote = await storageRequest();
+  pendingRemoteState = remote;
+  return remote;
+}
+
+function showStorageConflict(remote) {
+  if (remote) pendingRemoteState = remote;
+  setStorageStatus('conflict', 'Sync conflict', 'Choose which copy to keep');
+  el.remoteCopyTime.textContent = `Saved ${formatStorageTime(pendingRemoteState?.updatedAt)}`;
+  el.localCopyTime.textContent = `Changed ${formatStorageTime(state.storageMeta?.updatedAt)}`;
+  if (!el.storageConflictDialog.open) el.storageConflictDialog.showModal();
+}
+
+async function saveStateToOneDrive({ force = false } = {}) {
+  if (oneDriveSaveInProgress) return;
+  if (!oneDriveAvailable) {
+    await initialiseOneDriveStorage();
+    return;
+  }
+  oneDriveSaveInProgress = true;
+  setStorageStatus('syncing', 'Saving to OneDrive', oneDriveDisplayPath);
+  try {
+    const saved = await storageRequest({
+      method: 'PUT',
+      body: JSON.stringify({ state, expectedRevision: oneDriveRevision, force }),
+    });
+    oneDriveRevision = saved.revision;
+    oneDriveDisplayPath = saved.displayPath || oneDriveDisplayPath;
+    localChangesPending = false;
+    pendingRemoteState = null;
+    setStorageStatus('saved', 'Saved to OneDrive', `Last saved ${formatStorageTime(saved.updatedAt)}`);
+  } catch (error) {
+    if (error.status === 409) {
+      try {
+        showStorageConflict(await loadPendingRemoteState());
+      } catch {
+        setStorageStatus('error', 'OneDrive needs attention', 'Could not load the newer copy');
+      }
+    } else {
+      setStorageStatus('error', 'Saved in this browser', 'OneDrive save will retry');
+    }
+  } finally {
+    oneDriveSaveInProgress = false;
+  }
+}
+
+async function checkForOneDriveUpdates() {
+  if (!oneDriveAvailable || oneDriveSaveInProgress || el.storageConflictDialog.open) return;
+  try {
+    const remote = await storageRequest();
+    if (!remote.exists || remote.revision === oneDriveRevision) return;
+    if (localChangesPending) {
+      showStorageConflict(remote);
+      return;
+    }
+    useOneDriveState(remote.data, remote.revision, remote.displayPath);
+    showNotice('Loaded newer Money Map changes from OneDrive.');
+  } catch {
+    setStorageStatus('error', 'Saved in this browser', 'OneDrive connection will retry');
+  }
+}
+
+async function initialiseOneDriveStorage() {
+  clearInterval(oneDrivePollTimer);
+  setStorageStatus('syncing', 'Checking OneDrive', 'Browser fallback is available');
+  try {
+    const remote = await storageRequest();
+    oneDriveAvailable = true;
+    oneDriveRevision = remote.revision || '';
+    oneDriveDisplayPath = remote.displayPath || oneDriveDisplayPath;
+
+    if (!remote.exists) {
+      if (!state.storageMeta?.updatedAt) {
+        state = { ...state, schemaVersion: 5, storageMeta: { updatedAt: new Date().toISOString() } };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+      localChangesPending = true;
+      await saveStateToOneDrive({ force: true });
+    } else {
+      const remoteState = migrateState(remote.data);
+      const localHasData = stateHasUserData(state);
+      const remoteHasData = stateHasUserData(remoteState);
+      const localTime = Date.parse(state.storageMeta?.updatedAt || '') || 0;
+      const remoteTime = Date.parse(remoteState.storageMeta?.updatedAt || remote.updatedAt || '') || 0;
+
+      if (localHasData && !remoteHasData) {
+        localChangesPending = true;
+        await saveStateToOneDrive();
+      } else if (localHasData && remoteHasData && !localTime && !remoteTime && JSON.stringify(state) !== JSON.stringify(remoteState)) {
+        showStorageConflict(remote);
+      } else if (localTime > remoteTime) {
+        localChangesPending = true;
+        await saveStateToOneDrive();
+      } else {
+        useOneDriveState(remoteState, remote.revision, remote.displayPath);
+      }
+    }
+    oneDrivePollTimer = setInterval(checkForOneDriveUpdates, 30000);
+  } catch {
+    oneDriveAvailable = false;
+    setStorageStatus('local', 'Saved in this browser', 'Use start-money-map.cmd to enable OneDrive');
+  }
 }
 
 function normaliseHeader(value) {
@@ -1712,6 +1904,46 @@ el.emergencyTargetMonths.addEventListener('change', (event) => {
 });
 
 el.snapshotBtn.addEventListener('click', saveSnapshot);
+el.syncNowBtn.addEventListener('click', async () => {
+  if (pendingRemoteState || el.storageStatus.classList.contains('conflict')) {
+    if (!pendingRemoteState) {
+      try {
+        await loadPendingRemoteState();
+      } catch {
+        setStorageStatus('error', 'OneDrive needs attention', 'Could not load the newer copy');
+        return;
+      }
+    }
+    showStorageConflict(pendingRemoteState);
+    return;
+  }
+  if (!oneDriveAvailable) await initialiseOneDriveStorage();
+  else if (localChangesPending) await saveStateToOneDrive();
+  else await checkForOneDriveUpdates();
+});
+el.useOneDriveCopyBtn.addEventListener('click', async () => {
+  try {
+    const remote = pendingRemoteState || await loadPendingRemoteState();
+    useOneDriveState(remote.data, remote.revision, remote.displayPath);
+    pendingRemoteState = null;
+    el.storageConflictDialog.close();
+    showNotice('Loaded the OneDrive copy.');
+  } catch {
+    setStorageStatus('error', 'OneDrive needs attention', 'Could not load the selected copy');
+  }
+});
+el.keepDeviceCopyBtn.addEventListener('click', async () => {
+  el.storageConflictDialog.close();
+  pendingRemoteState = null;
+  localChangesPending = true;
+  await saveStateToOneDrive({ force: true });
+  if (!localChangesPending) showNotice('Saved this device copy to OneDrive.');
+});
+el.cancelStorageConflictBtn.addEventListener('click', () => {
+  el.storageConflictDialog.close();
+  setStorageStatus('conflict', 'Sync conflict', 'Select Resolve when you are ready');
+});
 
 initialiseFormOptions();
 render();
+initialiseOneDriveStorage();
