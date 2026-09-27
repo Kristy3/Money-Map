@@ -255,7 +255,7 @@ if (require.main === module) {
         ? `OneDrive data: ${storage.dataFile}`
         : 'OneDrive was not detected. Set MONEY_MAP_DATA_DIR before starting Money Map.');
       console.log('Keep this window open while using Money Map. Press Ctrl+C to stop.');
-      if (process.argv.includes('--open')) openBrowser(appUrl);
+      if (process.argv.includes('--open') && process.env.MONEY_MAP_SKIP_BROWSER !== '1') openBrowser(appUrl);
     })
     .catch((error) => {
       console.error(`Unable to start Money Map: ${error.message}`);
