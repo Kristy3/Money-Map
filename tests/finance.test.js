@@ -20,6 +20,23 @@ test('normalizes transaction and credit-card statement signs', () => {
   assert.equal(finance.normalizeTransactionAmount(-45, 'credit-card'), 45);
 });
 
+test('resolves transactions recorded directly against an import', () => {
+  const transactions = [
+    { id: 'one', importId: 'import-a' },
+    { id: 'two', importId: 'import-b' },
+  ];
+  assert.deepEqual(finance.importTransactionIds({ id: 'import-a', transactionIds: ['one'] }, transactions), ['one']);
+});
+
+test('falls back to transaction import IDs when restored import links are empty or stale', () => {
+  const transactions = [
+    { id: 'one', importId: 'import-a' },
+    { id: 'two', importId: 'import-b' },
+  ];
+  assert.deepEqual(finance.importTransactionIds({ id: 'import-a', transactionIds: [] }, transactions), ['one']);
+  assert.deepEqual(finance.importTransactionIds({ id: 'import-a', transactionIds: ['missing'] }, transactions), ['one']);
+});
+
 test('offset cash is not double counted when linked to an account', () => {
   const state = blank();
   state.accounts.push({ id: 'offset', balance: 50000, isLiquid: true, scenarioScope: 'both' });

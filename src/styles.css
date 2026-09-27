@@ -54,6 +54,29 @@ button:hover,
   background: #2563eb;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.secondary-button {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.secondary-button:hover {
+  background: #cbd5e1;
+}
+
+.danger-button {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.danger-button:hover {
+  background: #ffe4e6;
+}
+
 input,
 select {
   background: #ffffff;
@@ -302,7 +325,7 @@ small,
   border-radius: 8px;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(220px, 1fr) 90px 120px;
+  grid-template-columns: minmax(220px, 1fr) 90px 120px auto;
   padding: 10px;
 }
 
@@ -318,6 +341,28 @@ small,
 
 .import-history-item b {
   display: block;
+}
+
+.bulk-transaction-actions {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe7f7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto repeat(4, minmax(150px, 1fr)) auto auto auto;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.bulk-transaction-actions:not(.has-selection) select,
+.bulk-transaction-actions:not(.has-selection) button {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.bulk-transaction-actions strong {
+  white-space: nowrap;
 }
 
 .metrics {
@@ -681,7 +726,7 @@ small,
 
 table {
   border-collapse: collapse;
-  min-width: 1120px;
+  min-width: 1260px;
   width: 100%;
 }
 
@@ -701,6 +746,53 @@ th {
 
 tbody tr:hover {
   background: #f8fbff;
+}
+
+tbody tr.is-selected {
+  background: #eff6ff;
+}
+
+.transaction-checkbox {
+  min-height: auto;
+  min-width: auto;
+  width: 18px;
+}
+
+.table-action {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.transaction-dialog {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+  max-width: 560px;
+  padding: 0;
+  width: calc(100% - 32px);
+}
+
+.transaction-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.transaction-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.transaction-dialog label span {
+  color: #64748b;
+  display: block;
+  font-size: 0.82rem;
+  margin-bottom: 5px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 td strong {
@@ -1290,6 +1382,10 @@ td select {
   .ratio-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .bulk-transaction-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -1303,6 +1399,12 @@ td select {
   .split-grid,
   .affordability-grid,
   .imported-account-item {
+    grid-template-columns: 1fr;
+  }
+
+  .import-history-item,
+  .bulk-transaction-actions {
+    align-items: stretch;
     grid-template-columns: 1fr;
   }
 

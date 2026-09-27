@@ -20,7 +20,7 @@ const defaultRules = [
 ];
 
 const initialState = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   transactions: [],
   transactionAccountTypes: {},
   importHistory: [],
@@ -48,6 +48,8 @@ const initialState = {
 let state = loadState();
 let filters = { query: '', month: 'all', category: 'all', purpose: 'all', review: 'all' };
 let activeScenario = 'current';
+let selectedTransactionIds = new Set();
+let editingTransactionId = '';
 
 const el = {
   backupBtn: document.querySelector('#backupBtn'),
@@ -62,6 +64,7 @@ const el = {
   heroMonth: document.querySelector('#heroMonth'),
   heroInsight: document.querySelector('#heroInsight'),
   importHistory: document.querySelector('#importHistory'),
+  undoLatestImportBtn: document.querySelector('#undoLatestImportBtn'),
   importedAccounts: document.querySelector('#importedAccounts'),
   monthlyChart: document.querySelector('#monthlyChart'),
   categoryChart: document.querySelector('#categoryChart'),
@@ -101,6 +104,24 @@ const el = {
   purposes: document.querySelector('#purposes'),
   people: document.querySelector('#people'),
   transactionRows: document.querySelector('#transactionRows'),
+  selectVisibleTransactions: document.querySelector('#selectVisibleTransactions'),
+  bulkTransactionActions: document.querySelector('#bulkTransactionActions'),
+  selectedTransactionCount: document.querySelector('#selectedTransactionCount'),
+  bulkCategory: document.querySelector('#bulkCategory'),
+  bulkPurpose: document.querySelector('#bulkPurpose'),
+  bulkPerson: document.querySelector('#bulkPerson'),
+  bulkAccount: document.querySelector('#bulkAccount'),
+  applyBulkTransactionsBtn: document.querySelector('#applyBulkTransactionsBtn'),
+  clearTransactionSelectionBtn: document.querySelector('#clearTransactionSelectionBtn'),
+  deleteSelectedTransactionsBtn: document.querySelector('#deleteSelectedTransactionsBtn'),
+  transactionEditDialog: document.querySelector('#transactionEditDialog'),
+  transactionEditForm: document.querySelector('#transactionEditForm'),
+  editTransactionDate: document.querySelector('#editTransactionDate'),
+  editTransactionDescription: document.querySelector('#editTransactionDescription'),
+  editTransactionAmount: document.querySelector('#editTransactionAmount'),
+  editTransactionAccount: document.querySelector('#editTransactionAccount'),
+  transactionAccountOptions: document.querySelector('#transactionAccountOptions'),
+  cancelTransactionEditBtn: document.querySelector('#cancelTransactionEditBtn'),
   dropZone: document.querySelector('#dropZone'),
   nav: document.querySelector('.app-nav'),
   scenarioSelect: document.querySelector('#scenarioSelect'),
@@ -166,6 +187,7 @@ function migrateState(savedState) {
     purpose: '',
     ...transaction,
     rawAmount: Number(transaction.rawAmount ?? transaction.amount) || 0,
+    importFingerprint: transaction.importFingerprint || transaction.fingerprint || '',
   }));
   next.transactionAccountTypes = next.transactionAccountTypes && typeof next.transactionAccountTypes === 'object'
     ? next.transactionAccountTypes
@@ -180,6 +202,36 @@ function migrateState(savedState) {
   next.importHistory = Array.isArray(next.importHistory) && next.importHistory.length
     ? next.importHistory
     : importHistoryFromTransactions(next.transactions);
+  const transactionIds = new Set(next.transactions.map((transaction) => transaction.id));
+  const claimedTransactionIds = new Set();
+  next.importHistory = [...next.importHistory]
+    .sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))
+    .map((item) => {
+      const id = item.id || makeId();
+      let linkedIds = Array.isArray(item.transactionIds)
+        ? item.transactionIds.filter((transactionId) => transactionIds.has(transactionId) && !claimedTransactionIds.has(transactionId))
+        : [];
+      if (!linkedIds.length && Number(item.importedCount) > 0) {
+        const importedAt = new Date(item.importedAt).getTime();
+        linkedIds = next.transactions
+          .filter((transaction) => transaction.sourceFile === item.fileName && !claimedTransactionIds.has(transaction.id))
+          .sort((a, b) => {
+            const aDistance = Math.abs(new Date(a.importedAt).getTime() - importedAt);
+            const bDistance = Math.abs(new Date(b.importedAt).getTime() - importedAt);
+            return aDistance - bDistance;
+          })
+          .slice(0, Number(item.importedCount))
+          .map((transaction) => transaction.id);
+      }
+      linkedIds.forEach((transactionId) => claimedTransactionIds.add(transactionId));
+      return { ...item, id, transactionIds: linkedIds, importedCount: linkedIds.length };
+    });
+  const importIdByTransaction = new Map();
+  next.importHistory.forEach((item) => item.transactionIds.forEach((transactionId) => importIdByTransaction.set(transactionId, item.id)));
+  next.transactions = next.transactions.map((transaction) => ({
+    ...transaction,
+    importId: transaction.importId || importIdByTransaction.get(transaction.id) || '',
+  }));
   next.giftCards = (next.giftCards || []).map((giftCard) => ({
     id: makeId(),
     date: new Date().toISOString().slice(0, 10),
@@ -226,7 +278,7 @@ function migrateState(savedState) {
     next[collection] = next[collection].map((record) => ({ scenarioScope: 'both', soloPercent: 100, ...record }));
   });
   next.settings = { ...cloneInitialState().settings, ...(next.settings || {}) };
-  next.schemaVersion = 3;
+  next.schemaVersion = 4;
   const savedRules = (next.rules || []).map((rule) => ({
     purpose: '',
     ...rule,
@@ -265,6 +317,8 @@ function importHistoryFromTransactions(transactions) {
 
 function commit(nextState, renderOptions) {
   state = nextState;
+  const validTransactionIds = new Set(state.transactions.map((transaction) => transaction.id));
+  selectedTransactionIds = new Set([...selectedTransactionIds].filter((id) => validTransactionIds.has(id)));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   render(renderOptions);
 }
@@ -370,7 +424,7 @@ function parseCsv(text) {
   });
 }
 
-function mapCsvRows(rows, fileName) {
+function mapCsvRows(rows, fileName, importId = makeId(), importedAt = new Date().toISOString()) {
   const headers = Object.keys(rows[0] || {});
   const dateColumn = findColumn(headers, ['date', 'transactiondate', 'posteddate']);
   const descColumn = findColumn(headers, ['description', 'details', 'merchant', 'narrative', 'payee']);
@@ -394,11 +448,13 @@ function mapCsvRows(rows, fileName) {
         rawAmount,
         account,
         sourceFile: fileName,
-        importedAt: new Date().toISOString(),
+        importId,
+        importedAt,
         notes: '',
         ...applyRules(description),
       };
-      return { ...transaction, fingerprint: fingerprint(transaction) };
+      const importFingerprint = fingerprint(transaction);
+      return { ...transaction, fingerprint: importFingerprint, importFingerprint };
     });
 }
 
@@ -617,6 +673,134 @@ function updateTransaction(id, field, value) {
   return updatedTransaction;
 }
 
+function accountType(account) {
+  return state.transactionAccountTypes[account] || 'transaction';
+}
+
+function rawAmountForAccount(amount, account) {
+  return MoneyMapFinance.normalizeTransactionAmount(amount, accountType(account));
+}
+
+function transactionWithEdits(transaction, edits) {
+  const account = edits.account ?? transaction.account;
+  const amount = Number(edits.amount ?? transaction.amount);
+  const updated = {
+    ...transaction,
+    ...edits,
+    account,
+    amount,
+    rawAmount: rawAmountForAccount(amount, account),
+  };
+  return { ...updated, fingerprint: fingerprint(updated) };
+}
+
+function updateImportHistoryAfterTransactionRemoval(importHistory, removedIds) {
+  return importHistory.map((item) => {
+    const transactionIds = (item.transactionIds || []).filter((id) => !removedIds.has(id));
+    return { ...item, transactionIds, importedCount: transactionIds.length };
+  });
+}
+
+function removeTransactions(ids, message) {
+  const removedIds = new Set(ids);
+  if (!removedIds.size) return;
+  commit({
+    ...state,
+    transactions: state.transactions.filter((transaction) => !removedIds.has(transaction.id)),
+    importHistory: updateImportHistoryAfterTransactionRemoval(state.importHistory || [], removedIds),
+    giftCards: (state.giftCards || []).map((giftCard) =>
+      removedIds.has(giftCard.matchedTransactionId)
+        ? { ...giftCard, status: 'Pending', matchedTransactionId: '' }
+        : giftCard
+    ),
+  });
+  showNotice(message);
+}
+
+function applyBulkTransactionEdits() {
+  const edits = {};
+  if (el.bulkCategory.value) edits.category = el.bulkCategory.value;
+  if (el.bulkPurpose.value) edits.purpose = el.bulkPurpose.value;
+  if (el.bulkPerson.value) edits.person = el.bulkPerson.value;
+  if (el.bulkAccount.value) edits.account = el.bulkAccount.value;
+  if (!Object.keys(edits).length) {
+    showNotice('Choose at least one bulk change to apply.');
+    return;
+  }
+
+  const selectedIds = new Set(selectedTransactionIds);
+  const transactions = state.transactions.map((transaction) =>
+    selectedIds.has(transaction.id) ? transactionWithEdits(transaction, edits) : transaction
+  );
+  commit({
+    ...state,
+    transactions,
+    categories: edits.category && !state.categories.includes(edits.category) ? [...state.categories, edits.category] : state.categories,
+    purposes: edits.purpose && !state.purposes.includes(edits.purpose) ? [...state.purposes, edits.purpose] : state.purposes,
+    people: edits.person && !state.people.includes(edits.person) ? [...state.people, edits.person] : state.people,
+  });
+  showNotice(`Updated ${selectedIds.size} selected transaction${selectedIds.size === 1 ? '' : 's'}.`);
+}
+
+function openTransactionEditor(id) {
+  const transaction = state.transactions.find((item) => item.id === id);
+  if (!transaction) return;
+  editingTransactionId = id;
+  el.editTransactionDate.value = transaction.date;
+  el.editTransactionDescription.value = transaction.description;
+  el.editTransactionAmount.value = transaction.amount;
+  el.editTransactionAccount.value = transaction.account;
+  el.transactionEditDialog.showModal();
+}
+
+function saveTransactionEdits() {
+  const transaction = state.transactions.find((item) => item.id === editingTransactionId);
+  const amount = Number(el.editTransactionAmount.value);
+  const description = el.editTransactionDescription.value.trim();
+  const account = el.editTransactionAccount.value.trim();
+  if (!transaction || !el.editTransactionDate.value || !description || !account || !Number.isFinite(amount)) {
+    showNotice('Add a valid date, description, amount, and account.');
+    return;
+  }
+  const updated = transactionWithEdits(transaction, {
+    date: el.editTransactionDate.value,
+    description,
+    amount,
+    account,
+  });
+  commit({
+    ...state,
+    transactions: state.transactions.map((item) => item.id === editingTransactionId ? updated : item),
+  });
+  editingTransactionId = '';
+  el.transactionEditDialog.close();
+  showNotice('Transaction updated.');
+}
+
+function removeImport(importId) {
+  const item = (state.importHistory || []).find((historyItem) => historyItem.id === importId);
+  if (!item) return;
+  const transactionIds = new Set(MoneyMapFinance.importTransactionIds(item, state.transactions));
+  if (!window.confirm(`Remove ${transactionIds.size} transaction${transactionIds.size === 1 ? '' : 's'} imported from ${item.fileName}?`)) return;
+  const giftCards = (state.giftCards || []).map((giftCard) =>
+    transactionIds.has(giftCard.matchedTransactionId)
+      ? { ...giftCard, status: 'Pending', matchedTransactionId: '' }
+      : giftCard
+  );
+  commit({
+    ...state,
+    transactions: state.transactions.filter((transaction) => !transactionIds.has(transaction.id)),
+    importHistory: state.importHistory.filter((historyItem) => historyItem.id !== importId),
+    giftCards,
+  });
+  showNotice(`Removed the import from ${item.fileName}.`);
+}
+
+function undoLatestImport() {
+  const latest = [...(state.importHistory || [])].sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))[0];
+  if (latest) removeImport(latest.id);
+}
+
 function addRule() {
   const match = el.ruleMatch.value.trim();
   const category = el.ruleCategory.value.trim();
@@ -656,8 +840,12 @@ function handleFiles(files) {
   [...files].forEach((file) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const imported = mapCsvRows(parseCsv(reader.result), file.name);
-      const existing = new Set(state.transactions.map((transaction) => transaction.fingerprint));
+      const importId = makeId();
+      const importedAt = new Date().toISOString();
+      const imported = mapCsvRows(parseCsv(reader.result), file.name, importId, importedAt);
+      const existing = new Set(state.transactions.flatMap((transaction) =>
+        [transaction.fingerprint, transaction.importFingerprint].filter(Boolean)
+      ));
       const unique = imported.filter((transaction) => !existing.has(transaction.fingerprint));
       const duplicateCount = imported.length - unique.length;
       commit({
@@ -665,12 +853,13 @@ function handleFiles(files) {
         transactions: [...unique, ...state.transactions],
         importHistory: [
           {
-            id: makeId(),
+            id: importId,
             fileName: file.name,
-            importedAt: new Date().toISOString(),
+            importedAt,
             importedCount: unique.length,
             duplicateCount,
             totalRows: imported.length,
+            transactionIds: unique.map((transaction) => transaction.id),
           },
           ...(state.importHistory || []),
         ],
@@ -1151,6 +1340,7 @@ function renderImportHistory() {
     .sort((a, b) => String(b.importedAt).localeCompare(String(a.importedAt)))
     .slice(0, 8);
 
+  el.undoLatestImportBtn.disabled = !history.length;
   el.importHistory.innerHTML = history.length ? history.map((item) => `
     <article class="import-history-item">
       <div>
@@ -1159,12 +1349,13 @@ function renderImportHistory() {
       </div>
       <div>
         <b>${item.importedCount || 0}</b>
-        <span>new</span>
+        <span>transactions</span>
       </div>
       <div>
         <b>${item.duplicateCount || 0}</b>
         <span>duplicates</span>
       </div>
+      <button type="button" class="danger-button" data-delete-import="${escapeHtml(item.id)}">Delete import</button>
     </article>
   `).join('') : '<p class="empty-history">No CSV imports recorded yet.</p>';
 }
@@ -1213,6 +1404,52 @@ function updateImportedAccountType(account, accountType) {
   });
   commit({ ...state, transactionAccountTypes, transactions });
   showNotice(`${maskedAccount(account)} is now treated as a ${accountType === 'credit-card' ? 'credit card' : 'transaction account'}. Existing transactions were updated.`);
+}
+
+function transactionAccountValues() {
+  return [...new Set([
+    ...state.transactions.map((transaction) => transaction.account),
+    ...Object.keys(state.transactionAccountTypes || {}),
+  ].filter(Boolean))].sort((a, b) => maskedAccount(a).localeCompare(maskedAccount(b)));
+}
+
+function renderBulkTransactionActions(filtered) {
+  const selectedCount = selectedTransactionIds.size;
+  el.selectedTransactionCount.textContent = `${selectedCount} selected`;
+  el.bulkTransactionActions.classList.toggle('has-selection', selectedCount > 0);
+  [
+    el.bulkCategory,
+    el.bulkPurpose,
+    el.bulkPerson,
+    el.bulkAccount,
+    el.applyBulkTransactionsBtn,
+    el.clearTransactionSelectionBtn,
+    el.deleteSelectedTransactionsBtn,
+  ].forEach((control) => {
+    control.disabled = selectedCount === 0;
+  });
+
+  const bulkOptions = (values, placeholder) => `<option value="">${placeholder}</option>${sortLabels(values).map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
+  el.bulkCategory.innerHTML = bulkOptions(state.categories, 'Category: no change');
+  el.bulkPurpose.innerHTML = bulkOptions(state.purposes, 'Purpose: no change');
+  el.bulkPerson.innerHTML = bulkOptions(state.people, 'Person: no change');
+  el.bulkAccount.innerHTML = `<option value="">Account: no change</option>${transactionAccountValues().map((account) => `<option value="${escapeHtml(account)}">${escapeHtml(maskedAccount(account))}</option>`).join('')}`;
+  el.transactionAccountOptions.innerHTML = transactionAccountValues().map((account) => `<option value="${escapeHtml(account)}">${escapeHtml(maskedAccount(account))}</option>`).join('');
+
+  const visibleIds = filtered.map((transaction) => transaction.id);
+  const selectedVisibleCount = visibleIds.filter((id) => selectedTransactionIds.has(id)).length;
+  el.selectVisibleTransactions.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  el.selectVisibleTransactions.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+  el.selectVisibleTransactions.disabled = !visibleIds.length;
+}
+
+function renderTransactionSelection() {
+  const filtered = filteredTransactions();
+  renderBulkTransactionActions(filtered);
+  el.transactionRows.querySelectorAll('[data-select-transaction]').forEach((checkbox) => {
+    checkbox.checked = selectedTransactionIds.has(checkbox.dataset.selectTransaction);
+    checkbox.closest('tr')?.classList.toggle('is-selected', checkbox.checked);
+  });
 }
 
 function render({ renderTransactionRows = true } = {}) {
@@ -1282,9 +1519,11 @@ function render({ renderTransactionRows = true } = {}) {
   renderImportedAccounts();
   renderFinancialRecords();
   renderDashboard();
+  renderBulkTransactionActions(filtered);
 
   if (renderTransactionRows) el.transactionRows.innerHTML = filtered.length ? filtered.map((transaction) => `
-    <tr>
+    <tr class="${selectedTransactionIds.has(transaction.id) ? 'is-selected' : ''}">
+      <td><input type="checkbox" class="transaction-checkbox" data-select-transaction="${escapeHtml(transaction.id)}" aria-label="Select ${escapeHtml(transaction.description)}" ${selectedTransactionIds.has(transaction.id) ? 'checked' : ''} /></td>
       <td>${escapeHtml(transaction.date)}</td>
       <td>
         <strong>${escapeHtml(transaction.description)}</strong>
@@ -1310,8 +1549,9 @@ function render({ renderTransactionRows = true } = {}) {
         </select>
       </td>
       <td>${escapeHtml(transaction.account)}</td>
+      <td><button type="button" class="table-action" data-edit-transaction="${escapeHtml(transaction.id)}">Edit</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="7" class="empty">Upload a CSV statement to start building your budget.</td></tr>';
+  `).join('') : '<tr><td colspan="9" class="empty">Upload a CSV statement to start building your budget.</td></tr>';
 }
 
 el.csvInput.addEventListener('change', (event) => handleFiles(event.target.files));
@@ -1343,6 +1583,23 @@ el.reviewSelect.addEventListener('change', (event) => {
   filters.review = event.target.value;
   render();
 });
+el.selectVisibleTransactions.addEventListener('change', (event) => {
+  filteredTransactions().forEach((transaction) => {
+    if (event.target.checked) selectedTransactionIds.add(transaction.id);
+    else selectedTransactionIds.delete(transaction.id);
+  });
+  renderTransactionSelection();
+});
+el.applyBulkTransactionsBtn.addEventListener('click', applyBulkTransactionEdits);
+el.clearTransactionSelectionBtn.addEventListener('click', () => {
+  selectedTransactionIds.clear();
+  renderTransactionSelection();
+});
+el.deleteSelectedTransactionsBtn.addEventListener('click', () => {
+  const count = selectedTransactionIds.size;
+  if (!count || !window.confirm(`Delete ${count} selected transaction${count === 1 ? '' : 's'}?`)) return;
+  removeTransactions(selectedTransactionIds, `Deleted ${count} transaction${count === 1 ? '' : 's'}.`);
+});
 el.importedAccounts.addEventListener('change', (event) => {
   const account = event.target.dataset.importedAccount;
   if (account) updateImportedAccountType(account, event.target.value);
@@ -1363,7 +1620,19 @@ el.ruleList.addEventListener('click', (event) => {
   const id = event.target.dataset.deleteRule;
   if (id) deleteRule(id);
 });
+el.importHistory.addEventListener('click', (event) => {
+  const importId = event.target.dataset.deleteImport;
+  if (importId) removeImport(importId);
+});
+el.undoLatestImportBtn.addEventListener('click', undoLatestImport);
 el.transactionRows.addEventListener('change', (event) => {
+  const selectionId = event.target.dataset.selectTransaction;
+  if (selectionId) {
+    if (event.target.checked) selectedTransactionIds.add(selectionId);
+    else selectedTransactionIds.delete(selectionId);
+    renderTransactionSelection();
+    return;
+  }
   const id = event.target.dataset.transaction;
   const field = event.target.dataset.field;
   if (id && field) {
@@ -1374,6 +1643,21 @@ el.transactionRows.addEventListener('change', (event) => {
       chipRow.innerHTML = transactionChips(updatedTransaction);
     }
   }
+});
+el.transactionRows.addEventListener('click', (event) => {
+  const id = event.target.dataset.editTransaction;
+  if (id) openTransactionEditor(id);
+});
+el.transactionEditForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  saveTransactionEdits();
+});
+el.cancelTransactionEditBtn.addEventListener('click', () => {
+  editingTransactionId = '';
+  el.transactionEditDialog.close();
+});
+el.transactionEditDialog.addEventListener('close', () => {
+  editingTransactionId = '';
 });
 el.giftCardMatches.addEventListener('click', (event) => {
   const giftCardId = event.target.dataset.matchGiftCard;

@@ -28,6 +28,17 @@
     return accountType === 'credit-card' ? -parsedAmount : parsedAmount;
   }
 
+  function importTransactionIds(importRecord = {}, transactions = []) {
+    const existingIds = new Set(transactions.map((transaction) => transaction.id));
+    const recordedIds = Array.isArray(importRecord.transactionIds)
+      ? importRecord.transactionIds.filter((id) => existingIds.has(id))
+      : [];
+    if (recordedIds.length) return recordedIds;
+    return transactions
+      .filter((transaction) => transaction.importId === importRecord.id)
+      .map((transaction) => transaction.id);
+  }
+
   function monthlyEquivalent(amount, frequency = 'monthly') {
     return number(amount) * (FREQUENCY_MONTHS[String(frequency).toLowerCase()] ?? 1);
   }
@@ -296,6 +307,7 @@
     monthlyEquivalent,
     annualEquivalent,
     normalizeTransactionAmount,
+    importTransactionIds,
     scenarioAllocation,
     latestMonth,
     transactionMonthlyActuals,
