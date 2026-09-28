@@ -1323,15 +1323,98 @@ function renderHorizontalChart(container, entries, options = {}) {
   `).join('');
 }
 
+const chartPalette = ['#2563eb', '#0f766e', '#16a34a', '#d97706', '#e11d48', '#0891b2', '#64748b'];
+
+function renderTrendChart(container, entries, options = {}) {
+  const cleaned = entries
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .slice(-(options.limit || 12))
+    .map(([label, value]) => [label, Number(value)]);
+  if (!cleaned.length) {
+    container.className = 'chart empty-chart';
+    container.textContent = options.emptyText || 'No chart data yet.';
+    return;
+  }
+
+  const width = 640;
+  const height = 210;
+  const padding = { top: 20, right: 18, bottom: 26, left: 18 };
+  const values = cleaned.map(([, value]) => value);
+  let minimum = Math.min(0, ...values);
+  let maximum = Math.max(0, ...values);
+  if (minimum === maximum) {
+    minimum -= 1;
+    maximum += 1;
+  }
+  const range = maximum - minimum;
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+  const pointFor = (value, index) => ({
+    x: padding.left + (cleaned.length === 1 ? innerWidth / 2 : index * innerWidth / (cleaned.length - 1)),
+    y: padding.top + (maximum - value) / range * innerHeight,
+  });
+  const points = cleaned.map(([, value], index) => pointFor(value, index));
+  const zeroY = pointFor(0, 0).y;
+  const linePoints = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  const areaPoints = `${points[0].x.toFixed(1)},${zeroY.toFixed(1)} ${linePoints} ${points.at(-1).x.toFixed(1)},${zeroY.toFixed(1)}`;
+  const latest = cleaned.at(-1)[1];
+  const first = cleaned[0][1];
+  const difference = latest - first;
+
+  container.className = 'chart trend-chart';
+  container.innerHTML = `
+    <div class="trend-summary"><div><span>${escapeHtml(options.summaryLabel || 'Latest')}</span><strong class="${latest < 0 ? 'negative' : 'positive'}">${money(latest)}</strong></div><small>${cleaned.length > 1 ? `${difference >= 0 ? '+' : ''}${money(difference)} across this period` : escapeHtml(cleaned[0][0])}</small></div>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.ariaLabel || 'Financial trend chart')}" preserveAspectRatio="none">
+      <line class="chart-zero-line" x1="${padding.left}" y1="${zeroY}" x2="${width - padding.right}" y2="${zeroY}"></line>
+      <polygon class="trend-area" points="${areaPoints}"></polygon>
+      <polyline class="trend-line" points="${linePoints}"></polyline>
+      ${points.map((point, index) => `<circle class="trend-point ${cleaned[index][1] < 0 ? 'is-negative' : ''}" cx="${point.x}" cy="${point.y}" r="5"><title>${escapeHtml(cleaned[index][0])}: ${escapeHtml(money(cleaned[index][1]))}</title></circle>`).join('')}
+    </svg>
+    <div class="trend-axis"><span>${escapeHtml(cleaned[0][0])}</span>${cleaned.length > 2 ? `<span>${escapeHtml(cleaned[Math.floor((cleaned.length - 1) / 2)][0])}</span>` : ''}<span>${escapeHtml(cleaned.at(-1)[0])}</span></div>
+  `;
+}
+
+function renderDonutChart(container, entries, options = {}) {
+  const sorted = entries
+    .filter(([, value]) => Number(value) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]));
+  if (!sorted.length) {
+    container.className = 'chart empty-chart';
+    container.textContent = options.emptyText || 'No chart data yet.';
+    return;
+  }
+
+  const limit = options.limit || 6;
+  const visible = sorted.slice(0, limit).map(([label, value]) => [label, Number(value)]);
+  const remainder = sorted.slice(limit).reduce((total, [, value]) => total + Number(value), 0);
+  if (remainder > 0) visible.push(['Other', remainder]);
+  const total = visible.reduce((sum, [, value]) => sum + value, 0);
+  let offset = 0;
+  const segments = visible.map(([label, value], index) => {
+    const percentage = value / total * 100;
+    const segment = `<circle cx="60" cy="60" r="46" pathLength="100" fill="none" stroke="${chartPalette[index % chartPalette.length]}" stroke-width="18" stroke-dasharray="${percentage} ${100 - percentage}" stroke-dashoffset="${-offset}"><title>${escapeHtml(label)}: ${escapeHtml(money(value))}</title></circle>`;
+    offset += percentage;
+    return segment;
+  }).join('');
+
+  container.className = 'chart donut-chart';
+  container.innerHTML = `
+    <div class="donut-visual"><svg viewBox="0 0 120 120" role="img" aria-label="${escapeHtml(options.ariaLabel || 'Financial allocation chart')}"><circle class="donut-track" cx="60" cy="60" r="46" pathLength="100" fill="none" stroke-width="18"></circle><g transform="rotate(-90 60 60)">${segments}</g></svg><div class="donut-total"><span>Total</span><strong>${money(total)}</strong></div></div>
+    <div class="donut-legend">${visible.map(([label, value], index) => `<div><i style="background:${chartPalette[index % chartPalette.length]}"></i><span>${escapeHtml(label)}</span><b>${formatPercent(value / total)}</b><small>${money(value)}</small></div>`).join('')}</div>
+  `;
+}
+
 function renderMonthlyChart(transactions) {
   const monthly = sumBy(
     transactions.filter((transaction) => transaction.amount < 0),
     (transaction) => monthKey(transaction.date),
     (transaction) => Math.abs(transaction.amount)
   );
-  renderHorizontalChart(el.monthlyChart, Object.entries(monthly).sort((a, b) => a[0].localeCompare(b[0])), {
+  renderTrendChart(el.monthlyChart, Object.entries(monthly).sort((a, b) => a[0].localeCompare(b[0])).map(([month, value]) => [formatMonth(month), value]), {
     emptyText: 'Import transactions to see monthly spending.',
     limit: 12,
+    summaryLabel: 'Latest spending',
+    ariaLabel: 'Monthly spending trend',
   });
 }
 
@@ -1363,6 +1446,7 @@ function renderDashboard() {
   el.monthlyExpenseMetric.textContent = money(summary.expenses);
   el.monthlyBufferMetric.textContent = money(summary.buffer);
   el.monthlyBufferMetric.className = summary.buffer < 0 ? 'negative' : 'positive';
+  document.querySelector('#monthlyBufferCard').dataset.tone = summary.buffer < 0 ? 'danger' : 'success';
   el.savingsRateMetric.textContent = formatPercent(summary.savingsRate);
   el.incomeSourceNote.textContent = summary.source === 'plan' ? 'From your income plan' : `From ${summary.sourceMonth ? formatMonth(summary.sourceMonth) : 'latest transactions'}`;
   el.netWorthChange.textContent = previousSnapshot
@@ -1385,8 +1469,8 @@ function renderDashboard() {
     ['Debt / income', summary.debtToIncome], ['Emergency runway', `${summary.emergencyRunway.toFixed(1)} months`],
   ].map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${typeof value === 'number' ? formatPercent(value) : escapeHtml(value)}</strong></div>`).join('');
 
-  renderHorizontalChart(el.netWorthChart, snapshots.map((item) => [formatDate(item.date), Number(item.netWorth)]), { preserveOrder: true, limit: 12, emptyText: 'Add financial records to start tracking net worth.' });
-  renderHorizontalChart(el.forecastChart, forecast.map((item) => [formatMonth(item.month), item.surplus]), { preserveOrder: true, limit: 12, emptyText: 'Add income and expenses to build a forecast.' });
+  renderTrendChart(el.netWorthChart, snapshots.map((item) => [formatDate(item.date), Number(item.netWorth)]), { limit: 12, summaryLabel: 'Current net worth', ariaLabel: 'Net worth trend', emptyText: 'Add financial records to start tracking net worth.' });
+  renderTrendChart(el.forecastChart, forecast.map((item) => [formatMonth(item.month), item.surplus]), { limit: 12, summaryLabel: 'Final forecast month', ariaLabel: 'Twelve month cash flow forecast', emptyText: 'Add income and expenses to build a forecast.' });
   const wealthMix = {
     'Liquid cash': summary.liquidCash,
     'Other cash': Math.max(0, summary.cash - summary.liquidCash),
@@ -1395,7 +1479,7 @@ function renderDashboard() {
     Superannuation: summary.superannuation,
     'Other assets': summary.otherAssets,
   };
-  renderHorizontalChart(el.portfolioChart, Object.entries(wealthMix), { emptyText: 'Add assets to see your allocation.' });
+  renderDonutChart(el.portfolioChart, Object.entries(wealthMix), { ariaLabel: 'Wealth allocation', emptyText: 'Add assets to see your allocation.' });
 
   el.emergencySummary.innerHTML = `<div class="progress-heading"><div><span>Accessible emergency savings</span><strong>${money(summary.emergencyCash)}</strong></div><b>${summary.emergencyRunway.toFixed(1)} months</b></div><div class="progress-track"><i style="width:${summary.emergencyProgress * 100}%"></i></div><div class="goal-numbers"><span>Target ${money(summary.emergencyTarget)}</span><span>${money(summary.emergencyGap)} remaining</span><span>${formatPercent(summary.emergencyProgress)} complete</span></div>`;
   el.emergencyTargetMonths.value = summary.emergencyTargetMonths;
@@ -1699,11 +1783,13 @@ function render({ renderTransactionRows = true } = {}) {
     `).join('');
 
   renderMonthlyChart(calculated);
-  renderHorizontalChart(el.categoryChart, Object.entries(byCategory).filter(([, total]) => total < 0).map(([name, total]) => [name, Math.abs(total)]), {
+  renderDonutChart(el.categoryChart, Object.entries(byCategory).filter(([, total]) => total < 0).map(([name, total]) => [name, Math.abs(total)]), {
     emptyText: 'No spending categories yet.',
+    ariaLabel: 'Spending by category',
   });
-  renderHorizontalChart(el.purposeChart, Object.entries(byPurpose), {
+  renderDonutChart(el.purposeChart, Object.entries(byPurpose), {
     emptyText: 'No purpose data yet.',
+    ariaLabel: 'Spending by purpose',
   });
   renderGiftCards();
   renderDebts();
